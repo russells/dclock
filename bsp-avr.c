@@ -124,30 +124,51 @@ SIGNAL(TIMER1_COMPA_vect)
 }
 
 
+/**
+ * Set the ADC to channel 0, Vcc reference.
+ */
 static void
 buttons_init(void)
 {
-	/* Set the pins as inputs. */
-	DDRC  &= ~ (1 << 0);
-	DDRC  &= ~ (1 << 1);
-	DDRC  &= ~ (1 << 2);
-	/* Enable pull up resistors for the pins. */
-	PORTC |=   (1 << 0);
-	PORTC |=   (1 << 1);
-	PORTC |=   (1 << 2);
+
+	ADMUX = (0b01 << REFS0) |
+		(1 << ADLAR) |
+		(0b0000 << MUX0); /* ADC0 */
+	ADCSRA = (1 << ADEN) |
+		(0 << ADSC) |
+		(0 << ADATE) |
+		(1 << ADIF) |
+		(0 << ADIE) |
+		(0b110 << ADPS0); /* 16MHZ/64 = 250kHz ADC clock, for speed */
+	ADCSRB = (0 << ACME) |
+		(0b000 << ADTS0);
 }
+
+
+#define HYSTERESIS 12
+#define SELECT_MIN 0
+#define SELECT_MAX (2 * HYSTERESIS)
+#define UP_MIN     (123 - HYSTERESIS)
+#define UP_MAX     (123 + HYSTERESIS)
+#define DOWN_MIN   (215 - HYSTERESIS)
+#define DOWN_MAX   (215 + HYSTERESIS)
 
 
 uint8_t
 BSP_getButton(void)
 {
-	uint8_t pinc = PINC & 0b111;
+	uint16_t adc_value;
 
-	if (! (pinc & 0b001))
+	ADCSRA |= (1 << ADSC);
+	while (ADCSRA & (1 << ADSC))
+		;
+	adc_value = ADCH;
+
+	if (adc_value >= SELECT_MIN && adc_value <= SELECT_MAX)
 		return 1;
-	if (! (pinc & 0b010))
+	if (adc_value >= UP_MIN && adc_value <= UP_MAX)
 		return 2;
-	if (! (pinc & 0b100))
+	if (adc_value >= DOWN_MIN && adc_value <= DOWN_MAX)
 		return 3;
 	return 0;
 }
