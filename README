@@ -1,0 +1,4 @@
+Christopher's decimal clock.
+
+This version is programmed in C with QP-nano, instead of the Arduino
+environment used in the first version.
