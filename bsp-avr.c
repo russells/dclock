@@ -72,16 +72,17 @@ void BSP_init(void)
 /**
  * @brief Set up timer 1 to generate a periodic interrupt.
  *
- * We can use this interrupt to scan keys and for QP-nano periodic processing.
+ * We use this interrupt to scan keys and for QP-nano periodic processing.
  *
- * Timer calculations: CLKio==16MHz.  Then CLKio/8 == 2MHz.  Divide that by
- * 20000 == 100Hz.  The 20000 divisor gives us some leeway to adjust the time
- * of day clock (although adjustment by 1 means 4.32 seconds per day, so some
- * additional smarts may be needed).  100Hz may be a slightly high sample rate
- * for the buttons, but we can always sample on a subset of interrupts.
+ * This is done independently of the RTC so we can monitor the RTC's
+ * availablity separately.  If the RTC is unavailable (disconnected or broken)
+ * the user interface can continue to function, and we could even continue to
+ * function as a less accurate clock.
  *
- * @todo Implement the real time clock.
- * @todo Implement adjustments for the real time clock.
+ * During development, this will be the real time clock source.
+ *
+ * Timer calculations: CLKio==16MHz.  Then CLKio/16 == 1MHz.  Divide that by
+ * 31250 == 32Hz.
  */
 static void
 timer1_init(void)
@@ -97,8 +98,8 @@ timer1_init(void)
 	TCCR1B =(0 << WGM13 ) |	/* CTC */
 		(1 << WGM12 ) |	/* CTC */
 		(2 << CS10  );	/* CLKio/8 */
-	OCR1AH = 0x4e;		/* 0x4e20 = 20000 */
-	OCR1AL = 0x20;
+	OCR1AH = 0x7a;		/* 0x7a12 = 31250 */
+	OCR1AL = 0x12;
 	TIMSK1 =(1 << OCIE1A);
 
 	TOGGLE_DDR  |= (1<<TOGGLE_PIN);	/* output */
@@ -112,7 +113,9 @@ timer1_init(void)
 /**
  * @brief Handle the periodic interrupt from timer 1.
  *
- * @todo Scan the buttons.
+ * The buttons are scanned in response to the TICK32_SIGNAL.
+ *
+ * @todo If the RTC is not functioning, send TICK_RTC32_SIGNALs.
  */
 SIGNAL(TIMER1_COMPA_vect)
 {
