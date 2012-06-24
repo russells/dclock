@@ -1,0 +1,12 @@
+
+# Build temporary files.
+*.d
+*.o
+
+# Build output.
+dclock.elf
+dclock.hex
+dclock.map
+
+# QP stuff
+qp-nano

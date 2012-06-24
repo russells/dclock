@@ -1,0 +1,19 @@
+#!/bin/sh
+
+DEFAULT_V=0.1
+
+HAVE_GIT_DIR=
+HAVE_GIT=
+
+[ -d .git ] && HAVE_GIT_DIR=yes
+which git >/dev/null 2>&1 && HAVE_GIT=yes
+
+if [ -f VERSION ] ; then
+	V=`head -1 VERSION`
+elif [ -n "$HAVE_GIT_DIR" -a -n "$HAVE_GIT" ] ; then
+	V=`git describe --tags --always --dirty --match='v[0-9]*'`
+else
+	V="$DEFAULT_V"
+fi
+
+echo "$V"
