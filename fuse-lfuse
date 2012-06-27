@@ -1,0 +1,33 @@
+0xe7
+
+Default 0x62
+
+Our value 0xe7
+
+CKDIV8		1
+CKOUT		1
+SUTx		10	14CK+4.1ms
+CKSELx  	0111	Full swing crystal oscillator
+
+Bit		No	Description			Default Value
+CKDIV8 (4)	7	Divide clock by 8		0 (programmed)
+CKOUT (3)	6	Clock output 			1 (unprogrammed)
+SUT1  		5	Select start-up time		1 (unprogrammed)(1)
+SUT0		4	Select start-up time		0 (programmed)(1)
+CKSEL3		3	Select Clock source		0 (programmed)(2)
+CKSEL2		2	Select Clock source		0 (programmed)(2)
+CKSEL1		1	Select Clock source		1 (unprogrammed)(2)
+CKSEL0		0	Select Clock source		0 (programmed)(2)
+
+Note:
+
+1. The default value of SUT1..0 results in maximum start-up time for the
+   default clock source.  See Table 8-12 on page 33 for details.
+
+2. The default setting of CKSEL3..0 results in internal RC Oscillator @ 8
+   MHz. See Table 8-11 on page 33 for details.
+
+3. The CKOUT Fuse allows the system clock to be output on PORTB0. See
+   ”Clock Output Buffer” on page 35 for details.
+
+4. See ”System Clock Prescaler” on page 35 for details.

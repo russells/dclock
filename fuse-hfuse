@@ -1,0 +1,48 @@
+0xd9
+
+Default 0xd9
+
+Our value 0xd9
+
+RSTDISBL	1
+DWEN		1
+SPIEN		0
+WDTON		1
+EESAVE		1
+BOOTSZx		00
+BOOTRST		1
+
+Bit		No	Description			Default Value
+RSTDISBL (1)	7	External Reset Disable		1 (unprogrammed)
+DWEN		6	debugWIRE Enable		1 (unprogrammed)
+SPIEN (2)	5	Enable Serial Program and	0 (programmed, SPI
+			Data Downloading		   programming enabled)
+WDTON (3)	4	Watchdog Timer Always On	1 (unprogrammed)
+EESAVE		3	EEPROM memory is      		1 (unprogrammed), EEPROM
+			preserved through the Chip	   not reserved
+			Erase
+BOOTSZ1		2	Select Boot Size		0 (programmed)(4)
+			(see
+			Table 26-7 on page 289,
+			Table 26-10 on page 290 and
+			Table 26-13 on page 291
+			for details)
+BOOTSZ0		1	Select Boot Size		0 (programmed)(4)
+			(see
+			Table 26-7 on page 289,
+			Table 26-10 on page 290 and
+			Table 26-13 on page 291
+			for details)
+BOOTRST		0	Select Reset Vector		1 (unprogrammed)
+
+Notes:
+
+1. See ”Alternate Functions of Port C” on page 85 for description of
+   RSTDISBL Fuse.
+
+2. The SPIEN Fuse is not accessible in serial programming mode.
+
+3. See ”WDTCSR – Watchdog Timer Control Register” on page 54 for details.
+
+4. The default value of BOOTSZ[1:0] results in maximum Boot Size. See ”Pin
+   Name Mapping” on page 300.
