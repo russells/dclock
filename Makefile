@@ -86,8 +86,16 @@ $(PROGRAM): $(OBJS)
 $(VERSION_OBJS): $(SRC_OBJS)
 
 
+# Utility program(s).
+
+decimal-time-conversion: decimal-time-conversion.c
+	gcc -Wall -o decimal-time-conversion decimal-time-conversion.c
+
+
 ifneq ($(MAKECMDGOALS),clean)
+ifneq ($(MAKECMDGOALS),decimallll-time-conversion)
 -include $(DEPS) $(VERSION_DEPS)
+endif
 endif
 
 
@@ -104,6 +112,7 @@ tags:
 clean:
 	-$(RM_RF) $(OBJS) $(PROGRAM) $(HEXPROGRAM) $(PROGRAMMAPFILE) $(BINPROGRAM) $(DEPS)
 	-$(RM_RF) doc
+	-$(RM_RF) decimal-time-conversion
 
 .PHONY: flash
 flash: $(HEXPROGRAM)
