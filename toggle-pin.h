@@ -12,26 +12,42 @@
  *
  * The first statement in each interrupt handler should be
  * @code
- *    TOGGLE_PORT |= ~ (1 << TOGGLE_PIN);
+ *    TOGGLE_ON();
  * @endcode
  *
  * This will raise the pin, and that pin will stay high until AVR_sleep()
- * lowers it just before we go back to sleep.  Monitoring that pin will give
- * some idea of how much CPU is being used.
+ * lowers it just before we go back to sleep, with
+ * @code
+ *    TOGGLE_OFF();
+ * @endcode
+ *
+ * Monitoring that pin will give some idea of how much CPU is being used.
  */
-#define TOGGLE_PORT PORTB
+#define TOGGLE_PORT PORTC
 /**
  * @brief The Data Direction Register for the toggled pin.
  *
  * @see TOGGLE_PORT.
  */
-#define TOGGLE_DDR  DDRB
+#define TOGGLE_DDR  DDRC
 /**
  * @brief The number of the toggled pin.
  *
  * @see TOGGLE_PORT.
  */
-#define TOGGLE_PIN  2
+#define TOGGLE_PIN  3
+
+
+/**
+ * @brief Set up the toggle pin.
+ *
+ * Call this at the start of the program.
+ */
+#define TOGGLE_BEGIN()					\
+	do {						\
+		TOGGLE_DDR |= (1 << TOGGLE_PIN);	\
+		TOGGLE_ON();				\
+	} while (0)
 
 
 /**
@@ -77,7 +93,7 @@
 		wdt_disable();					\
 		while (1) {					\
 			TOGGLE_PORT ^= (1 << TOGGLE_PIN);	\
-			_delay_us(n);				\
+			_delay_ms(n);				\
 		}						\
 	} while (0)
 

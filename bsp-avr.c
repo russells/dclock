@@ -117,10 +117,6 @@ timer1_init(void)
 	OCR1AL = 0x24;
 	TIMSK1 =(1 << OCIE1A);
 
-	TOGGLE_DDR  |= (1<<TOGGLE_PIN);	/* output */
-	TOGGLE_PORT |= (1<<TOGGLE_PIN);	/* high, toggled by interrupts and
-					   AVR_sleep() */
-
 	sei();
 }
 

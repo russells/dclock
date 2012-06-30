@@ -36,6 +36,7 @@ Q_ASSERT_COMPILE(QF_MAX_ACTIVE == Q_DIM(QF_active) - 1);
 int main(int argc, char **argv)
 {
  startmain:
+	TOGGLE_BEGIN();
 	BSP_startmain();
 	dclock_ctor();
 	buttons_ctor();
