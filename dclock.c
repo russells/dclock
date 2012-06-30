@@ -4,6 +4,7 @@
 
 #include "dclock.h"
 #include "buttons.h"
+#include "display.h"
 #include "bsp.h"
 #include "toggle-pin.h"
 #include <string.h>
@@ -38,6 +39,7 @@ int main(int argc, char **argv)
  startmain:
 	TOGGLE_BEGIN();
 	BSP_startmain();
+	display_init();
 	dclock_ctor();
 	buttons_ctor();
 	BSP_init(); /* initialize the Board Support Package */
@@ -61,9 +63,22 @@ static QState dclockInitial(struct DClock *me)
 
 static QState dclockState(struct DClock *me)
 {
+	static uint8_t counter;
+
 	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		display_clear();
+		DISPLAY_LINE1_ROM("    A clock!");
+		DISPLAY_LINE2_ROM(V);
+		counter = 0;
+		return Q_HANDLED();
 	case WATCHDOG_SIGNAL:
 		BSP_watchdog(me);
+		/* Test the assertion code. */
+		counter++;
+		if (counter >= 10) {
+			Q_ASSERT( 0 );
+		}
 		return Q_HANDLED();
 	}
 	return Q_SUPER(&QHsm_top);

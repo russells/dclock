@@ -5,6 +5,10 @@
 #include <avr/wdt.h>
 
 
+/* Copied from display.h, for Q_onAssert(). */
+void display_assert(char const Q_ROM * const Q_ROM_VAR file, int line);
+
+
 Q_DEFINE_THIS_FILE;
 
 
@@ -48,7 +52,7 @@ void QF_onIdle(void)
 
 void Q_onAssert(char const Q_ROM * const Q_ROM_VAR file, int line)
 {
-	//serial_assert(file, line);
+	display_assert(file, line);
 }
 
 
