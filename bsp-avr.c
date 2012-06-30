@@ -2,6 +2,7 @@
 #include "dclock.h"
 #include "buttons.h"
 #include "toggle-pin.h"
+#include <avr/wdt.h>
 
 
 Q_DEFINE_THIS_FILE;
@@ -53,7 +54,17 @@ void Q_onAssert(char const Q_ROM * const Q_ROM_VAR file, int line)
 
 void BSP_watchdog(struct DClock *me)
 {
+	wdt_reset();
+	WDTCSR |= (1 << WDIE);
+	/* Turn off the Arduino LED.  It was turned on by the interrupt handler
+	   that sent the WATCHDOG_SIGNAL. */
+	PORTB &= ~ (1 << 5);
+}
 
+
+SIGNAL(WDT_vect)
+{
+	QActive_postISR((QActive*)(&dclock), WATCHDOG_SIGNAL, 0);
 }
 
 
@@ -65,7 +76,11 @@ void BSP_startmain(void)
 
 void BSP_init(void)
 {
-
+	wdt_reset();
+	wdt_enable(WDTO_500MS);
+	WDTCSR |= (1 << WDIE);
+	/* Make the Arduino LED pin (D13) an output. */
+	DDRB |= (1 << 5);
 }
 
 
@@ -81,8 +96,8 @@ void BSP_init(void)
  *
  * During development, this will be the real time clock source.
  *
- * Timer calculations: CLKio==16MHz.  Then CLKio/16 == 1MHz.  Divide that by
- * 31250 == 32Hz.
+ * Timer calculations: CLKio==16MHz.  Then CLKio/8 == 2MHz.  Divide that by
+ * 62500 == 32Hz.
  */
 static void
 timer1_init(void)
@@ -98,8 +113,8 @@ timer1_init(void)
 	TCCR1B =(0 << WGM13 ) |	/* CTC */
 		(1 << WGM12 ) |	/* CTC */
 		(2 << CS10  );	/* CLKio/8 */
-	OCR1AH = 0x7a;		/* 0x7a12 = 31250 */
-	OCR1AL = 0x12;
+	OCR1AH = 0xf4;		/* 0xf424 = 62500 */
+	OCR1AL = 0x24;
 	TIMSK1 =(1 << OCIE1A);
 
 	TOGGLE_DDR  |= (1<<TOGGLE_PIN);	/* output */
@@ -119,10 +134,21 @@ timer1_init(void)
  */
 SIGNAL(TIMER1_COMPA_vect)
 {
+	static uint8_t watchdog_counter = 0;
+
 	TOGGLE_ON();
 	fff(&dclock);
 	QActive_postISR((QActive*)(&dclock), TICK32_SIGNAL, 0);
 	QActive_postISR((QActive*)(&buttons), TICK32_SIGNAL, 0);
+	watchdog_counter ++;
+	if (watchdog_counter >= 7) {
+		fff(&dclock);
+		QActive_postISR((QActive*)(&dclock), WATCHDOG_SIGNAL, 0);
+		watchdog_counter = 0;
+		/* Turn on the Arduino LED.  It gets turned off when
+		   WATCHDOG_SIGNAL is handled. */
+		PORTB |= (1 << 5);
+	}
 	QF_tick();
 }
 
