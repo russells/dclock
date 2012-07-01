@@ -105,7 +105,7 @@ static QState dclockState(struct DClock *me)
 			snprintf(line, 16, "%02u.%02u.%02u", h, m, s);
 			display_line1(line);
 			serial_send(line);
-			SERIALSTR("\r\n");
+			SERIALSTR("\r");
 		}
 		return Q_HANDLED();
 	}
