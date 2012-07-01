@@ -10,6 +10,7 @@
 #include "bsp.h"
 #include "toggle-pin.h"
 #include <string.h>
+#include <stdio.h>
 
 
 /** The only active DClock. */
@@ -56,6 +57,7 @@ int main(int argc, char **argv)
 void dclock_ctor(void)
 {
 	QActive_ctor((QActive *)(&dclock), (QStateHandler)&dclockInitial);
+	dclock.dseconds = 12345;
 }
 
 
@@ -67,21 +69,43 @@ static QState dclockInitial(struct DClock *me)
 
 static QState dclockState(struct DClock *me)
 {
-	static uint8_t counter;
-
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		display_clear();
 		DISPLAY_LINE1_ROM("    A clock!");
 		DISPLAY_LINE2_ROM(V);
-		counter = 0;
 		return Q_HANDLED();
 	case WATCHDOG_SIGNAL:
 		BSP_watchdog(me);
-		/* Test the assertion code. */
-		counter++;
-		if (counter >= 10) {
-			Q_ASSERT( 0 );
+		return Q_HANDLED();
+	case TICK_DECIMAL_32_SIGNAL:
+		if (Q_PAR(me) >= 32) {
+			char line[16];
+			uint32_t sec;
+			uint8_t h, m, s;
+
+			/* We set the decimal 1/32 second counter early, to
+			   avoid the possibility that the second calculations
+			   and display take much longer than the time before
+			   the next timer interrupt, and therefore before the
+			   next signal arrives. */
+			BSP_set_decimal_32_counter(0);
+			me->dseconds++;
+			if (me->dseconds >= 100000) {
+				me->dseconds = 0;
+			}
+
+			display_clear();
+			sec = me->dseconds;
+			s = sec % 100;
+			sec /= 100;
+			m = sec % 100;
+			sec /= 100;
+			h = sec % 100;
+			snprintf(line, 16, "%02u.%02u.%02u", h, m, s);
+			display_line1(line);
+			serial_send(line);
+			SERIALSTR("\r\n");
 		}
 		return Q_HANDLED();
 	}

@@ -45,7 +45,7 @@ static QState buttonsState(struct Buttons *me)
 	uint8_t button;
 
 	switch (Q_SIG(me)) {
-	case TICK32_SIGNAL:
+	case TICK_DECIMAL_32_SIGNAL:
 		button = BSP_getButton();
 		switch (button) {
 		default: /* Shouldn't happen - handle as though nothing is

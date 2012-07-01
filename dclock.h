@@ -41,7 +41,7 @@ enum DClockSignals {
 	/**
 	 * Send to the timekeeper 32 times a second.
 	 */
-	TICK32_SIGNAL,
+	TICK_DECIMAL_32_SIGNAL,
 	MAX_PUB_SIG,
 	MAX_SIG,
 };
@@ -56,6 +56,7 @@ void dclock_ctor(void);
  */
 struct DClock {
 	QActive super;
+	uint32_t dseconds;
 };
 
 

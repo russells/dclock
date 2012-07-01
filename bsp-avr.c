@@ -93,17 +93,22 @@ void BSP_init(void)
 /**
  * @brief Set up timer 1 to generate a periodic interrupt.
  *
- * We use this interrupt to scan keys and for QP-nano periodic processing.
+ * We use this interrupt to count decimal seconds, to scan keys, and for
+ * QP-nano periodic processing.
  *
  * This is done independently of the RTC so we can monitor the RTC's
  * availablity separately.  If the RTC is unavailable (disconnected or broken)
  * the user interface can continue to function, and we could even continue to
  * function as a less accurate clock.
  *
+ * We set up the timer to give 32 interrupts in a decimal second - ie 32
+ * interrupts in 0.864 seconds.
+ *
  * During development, this will be the real time clock source.
  *
  * Timer calculations: CLKio==16MHz.  Then CLKio/8 == 2MHz.  Divide that by
- * 62500 == 32Hz.
+ * 62500 == 32Hz.  Multiply that by 0.864 to give 32 periods in a decimal
+ * second == 54000.
  */
 static void
 timer1_init(void)
@@ -119,8 +124,8 @@ timer1_init(void)
 	TCCR1B =(0 << WGM13 ) |	/* CTC */
 		(1 << WGM12 ) |	/* CTC */
 		(2 << CS10  );	/* CLKio/8 */
-	OCR1AH = 0xf4;		/* 0xf424 = 62500 */
-	OCR1AL = 0x24;
+	OCR1AH = 0xd2;		/* 0xd2f0 = 54000 */
+	OCR1AL = 0xf0;
 	TIMSK1 =(1 << OCIE1A);
 
 	sei();
@@ -128,9 +133,27 @@ timer1_init(void)
 
 
 /**
+ * Increments each TICK_DECIMAL_32_SIGNAL, so we can see where in the decimal
+ * second an event was generated.  Set to zero by the code that ticks over
+ * decimal seconds.
+ */
+static uint8_t decimal_32_counter;
+
+
+void BSP_set_decimal_32_counter(uint8_t dc)
+{
+	uint8_t sreg;
+	sreg = SREG;
+	cli();
+	decimal_32_counter = dc;
+	SREG = sreg;
+}
+
+
+/**
  * @brief Handle the periodic interrupt from timer 1.
  *
- * The buttons are scanned in response to the TICK32_SIGNAL.
+ * The buttons are scanned in response to the TICK_DECIMAL_32_SIGNAL.
  *
  * @todo If the RTC is not functioning, send TICK_RTC32_SIGNALs.
  */
@@ -140,8 +163,14 @@ SIGNAL(TIMER1_COMPA_vect)
 
 	TOGGLE_ON();
 	fff(&dclock);
-	QActive_postISR((QActive*)(&dclock), TICK32_SIGNAL, 0);
-	QActive_postISR((QActive*)(&buttons), TICK32_SIGNAL, 0);
+	/* Increment the counter before sending the event.  We should never
+	   send a zero.  No real reason, just the way it is. */
+	decimal_32_counter ++;
+	QActive_postISR((QActive*)(&dclock), TICK_DECIMAL_32_SIGNAL,
+			decimal_32_counter);
+	/* The buttons don't care where we are in the second, so don't send the
+	   counter with this signal. */
+	QActive_postISR((QActive*)(&buttons), TICK_DECIMAL_32_SIGNAL, 0);
 	watchdog_counter ++;
 	if (watchdog_counter >= 7) {
 		fff(&dclock);

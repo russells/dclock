@@ -70,4 +70,7 @@ uint8_t BSP_getButton(void);
 
 void BSP_watchdog(struct DClock *me);
 
+
+void BSP_set_decimal_32_counter(uint8_t dc);
+
 #endif	/* bsp_h_INCLUDED */
