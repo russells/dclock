@@ -14,6 +14,7 @@ Q_DEFINE_THIS_FILE;
 
 
 static void timer1_init(void);
+static void timer2_init(void);
 static void buttons_init(void);
 
 
@@ -24,6 +25,7 @@ void QF_onStartup(void)
 	   Timer 1 doesn't generate any events yet, but will eventually scan
 	   the buttons and send button events. */
 	timer1_init();
+	timer2_init();
 	buttons_init();
 }
 
@@ -241,4 +243,100 @@ BSP_getButton(void)
 	if (adc_value >= DOWN_MIN && adc_value <= DOWN_MAX)
 		return 3;
 	return 0;
+}
+
+
+#define BRIGHTNESS_0 0
+/** A PWM value of 0 in the timer results in a one cycle pulse from the output
+    pin, which is the minimum brightness we can get, apart from "off". */
+#define BRIGHTNESS_1 0
+/** The default brightness at startup. */
+#define BRIGHTNESS_2 18
+#define BRIGHTNESS_3 70
+/** Full brightness. */
+#define BRIGHTNESS_4 255
+
+
+/** The current brightness level.  This is distinct from the PWM value for the
+    timer because level 0 is handled differently.  We essentially need to zero
+    levels for PWM. */
+static uint8_t brightness;
+
+
+/**
+ * Generate a PWM signal for LCD brightness.
+ */
+static void timer2_init(void)
+{
+	cli();
+	TCCR2A = (0b00 << COM2A0) | /* OC2A disconnected */
+		(0b10 << COM2B0) |  /* Clear OC2B on compare match */
+		(0b11 << WGM20);    /* WGM = 0b011, Fast PWM */
+	TCCR2B = (0 << FOC2A) |
+		(0 << FOC2B) |
+		(0 << WGM22) |	/* WMG = 0b011 */
+		(0b001 << CS20); /* No clock scaling, PWM at 62.5kHZ (16MHz/256)*/
+	brightness = 2;
+	OCR2B = BRIGHTNESS_2;
+	TIMSK2 = 0; 		/* No interrupts */
+	sei();
+}
+
+
+void BSP_inc_brightness(void)
+{
+	switch (brightness) {
+	case 0:
+		brightness = 1;
+		OCR2B = BRIGHTNESS_1;
+		/* Reconnect the timer to the port pin. */
+		TCCR2A |= (1 << COM2B1);
+		break;
+	case 1:
+	default:		/* If something goes wrong, mid-range. */
+		brightness = 2;
+		OCR2B = BRIGHTNESS_2;
+		break;
+	case 2:
+		brightness = 3;
+		OCR2B = BRIGHTNESS_3;
+		break;
+	case 3:
+		brightness = 4;
+		OCR2B = BRIGHTNESS_4;
+		break;
+	case 4:
+		break;
+	}
+}
+
+
+void BSP_dec_brightness(void)
+{
+	switch (brightness) {
+	case 0:
+		break;
+	case 1:
+		brightness = 0;
+		OCR2B = BRIGHTNESS_0;
+		/* Make sure the pin is off when we make it an ordinary
+		   output. */
+		PORTD &= ~ (1 << 3);
+		/* Disconnect the timer from the port pin. */
+		TCCR2A &= ~ (1 << COM2B1);
+		break;
+	case 2:
+		brightness = 1;
+		OCR2B = BRIGHTNESS_1;
+		break;
+	case 3:
+	default:		/* If something goes wrong, mid-range. */
+		brightness = 2;
+		OCR2B = BRIGHTNESS_2;
+		break;
+	case 4:
+		brightness = 3;
+		OCR2B = BRIGHTNESS_3;
+		break;
+	}
 }

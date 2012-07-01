@@ -38,6 +38,8 @@ void BSP_startmain();		/* Code to put right at the start of main() */
 void BSP_init(void);
 
 uint8_t BSP_getButton(void);
+void BSP_inc_brightness(void);
+void BSP_dec_brightness(void);
 
 void BSP_watchdog(struct DClock *me);
 

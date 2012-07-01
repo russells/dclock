@@ -116,10 +116,12 @@ static QState dclockState(struct DClock *me)
 	case BUTTON_UP_PRESS_SIGNAL:
 		SERIALSTR("\r\nUp\r\n");
 		DISPLAY_LINE2_ROM("Up           ");
+		BSP_inc_brightness();
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 		SERIALSTR("\r\nDown\r\n");
 		DISPLAY_LINE2_ROM("Down         ");
+		BSP_dec_brightness();
 		return Q_HANDLED();
 
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
@@ -142,10 +144,12 @@ static QState dclockState(struct DClock *me)
 	case BUTTON_UP_REPEAT_SIGNAL:
 		SERIALSTR("\r\nUp repeat\r\n");
 		DISPLAY_LINE2_ROM("Up repeat    ");
+		BSP_inc_brightness();
 		return Q_HANDLED();
 	case BUTTON_DOWN_REPEAT_SIGNAL:
 		SERIALSTR("\r\nDown repeat\r\n");
 		DISPLAY_LINE2_ROM("Down repeat  ");
+		BSP_dec_brightness();
 		return Q_HANDLED();
 	}
 	return Q_SUPER(&QHsm_top);
