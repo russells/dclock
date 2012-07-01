@@ -5,6 +5,8 @@
 #include "dclock.h"
 #include "buttons.h"
 #include "display.h"
+#include "serial.h"
+#include "version.h"
 #include "bsp.h"
 #include "toggle-pin.h"
 #include <string.h>
@@ -39,6 +41,8 @@ int main(int argc, char **argv)
  startmain:
 	TOGGLE_BEGIN();
 	BSP_startmain();
+	serial_init();
+	serial_send_rom(startup_message);
 	display_init();
 	dclock_ctor();
 	buttons_ctor();

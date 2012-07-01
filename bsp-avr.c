@@ -1,6 +1,7 @@
 #include "bsp.h"
 #include "dclock.h"
 #include "buttons.h"
+#include "serial.h"
 #include "toggle-pin.h"
 #include <avr/wdt.h>
 
@@ -52,6 +53,7 @@ void QF_onIdle(void)
 
 void Q_onAssert(char const Q_ROM * const Q_ROM_VAR file, int line)
 {
+	serial_assert_nostop(file, line);
 	display_assert(file, line);
 }
 
