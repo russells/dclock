@@ -37,35 +37,6 @@ void BSP_startmain();		/* Code to put right at the start of main() */
 
 void BSP_init(void);
 
-#define BSP_logmsg(f,...)
-#define BSP_print_event(me,name,e)
-
-void BSP_available(void);
-void BSP_not_available(void);
-void BSP_play_doorbell(struct DClock *me);
-void BSP_doorbell_finished(struct DClock *me);
-void BSP_play_buzz(struct DClock *me);
-void BSP_buzz_finished(struct DClock *me);
-void BSP_start_timer(struct DClock *me);
-void BSP_add_to_timer(struct DClock *me);
-void BSP_terminated(struct DClock *me);
-
-void BSP_pressedDown    (struct DClock *me, int repeatCount);
-void BSP_repeatedDown   (struct DClock *me, int repeatCount);
-void BSP_releasedDown   (struct DClock *me);
-
-void BSP_pressedUp      (struct DClock *me, int repeatCount);
-void BSP_repeatedUp     (struct DClock *me, int repeatCount);
-void BSP_releasedUp     (struct DClock *me);
-
-void BSP_pressedSelect  (struct DClock *me, int repeatCount);
-void BSP_repeatedSelect (struct DClock *me, int repeatCount);
-void BSP_releasedSelect (struct DClock *me);
-
-void BSP_pressedEscape  (struct DClock *me, int repeatCount);
-void BSP_repeatedEscape (struct DClock *me, int repeatCount);
-void BSP_releasedEscape (struct DClock *me);
-
 uint8_t BSP_getButton(void);
 
 void BSP_watchdog(struct DClock *me);
