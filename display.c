@@ -283,7 +283,7 @@ static void one_char(uint8_t rs, char c)
 	EN(1);
 
 	/* Ensure we wait for this char to be absorbed by the LCD. */
-	_delay_ms(5);
+	_delay_us(37);
 
 	SREG = sreg;
 }
