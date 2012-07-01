@@ -23,16 +23,6 @@ struct Buttons {
 	 * be set to 0 each time a new button is pressed.
 	 */
 	uint8_t repeatCount;
-	/**
-	 * The signal to send when a short button press is detected.  This is
-	 * only sent when a button is pressed and released before we detect a
-	 * long press.
-	 */
-	int shortSignal;
-	/**
-	 * The signal to send when a long button press is detected.
-	 */
-	int repeatSignal;
 };
 
 

@@ -205,6 +205,7 @@ buttons_init(void)
 }
 
 
+/*
 #define HYSTERESIS 12
 #define SELECT_MIN 0
 #define SELECT_MAX (2 * HYSTERESIS)
@@ -212,6 +213,15 @@ buttons_init(void)
 #define UP_MAX     (123 + HYSTERESIS)
 #define DOWN_MIN   (215 - HYSTERESIS)
 #define DOWN_MAX   (215 + HYSTERESIS)
+*/
+/* Values for the Freetonics LCD Keypad Shield. */
+#define HYSTERESIS 8
+#define SELECT_MIN (185 - HYSTERESIS)
+#define SELECT_MAX (185 + HYSTERESIS)
+#define UP_MIN     (36  - HYSTERESIS)
+#define UP_MAX     (36  + HYSTERESIS)
+#define DOWN_MIN   (82  - HYSTERESIS)
+#define DOWN_MAX   (82  + HYSTERESIS)
 
 
 uint8_t

@@ -108,6 +108,45 @@ static QState dclockState(struct DClock *me)
 			SERIALSTR("\r");
 		}
 		return Q_HANDLED();
+
+	case BUTTON_SELECT_PRESS_SIGNAL:
+		SERIALSTR("\r\nSelect\r\n");
+		DISPLAY_LINE2_ROM("Select       ");
+		return Q_HANDLED();
+	case BUTTON_UP_PRESS_SIGNAL:
+		SERIALSTR("\r\nUp\r\n");
+		DISPLAY_LINE2_ROM("Up           ");
+		return Q_HANDLED();
+	case BUTTON_DOWN_PRESS_SIGNAL:
+		SERIALSTR("\r\nDown\r\n");
+		DISPLAY_LINE2_ROM("Down         ");
+		return Q_HANDLED();
+
+	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
+		SERIALSTR("\r\nSelect long\r\n");
+		DISPLAY_LINE2_ROM("Select long  ");
+		return Q_HANDLED();
+	case BUTTON_UP_LONG_PRESS_SIGNAL:
+		SERIALSTR("\r\nUp long\r\n");
+		DISPLAY_LINE2_ROM("Up long      ");
+		return Q_HANDLED();
+	case BUTTON_DOWN_LONG_PRESS_SIGNAL:
+		SERIALSTR("\r\nDown long\r\n");
+		DISPLAY_LINE2_ROM("Down long    ");
+		return Q_HANDLED();
+
+	case BUTTON_SELECT_REPEAT_SIGNAL:
+		SERIALSTR("\r\nSelect repeat\r\n");
+		DISPLAY_LINE2_ROM("Select repeat");
+		return Q_HANDLED();
+	case BUTTON_UP_REPEAT_SIGNAL:
+		SERIALSTR("\r\nUp repeat\r\n");
+		DISPLAY_LINE2_ROM("Up repeat    ");
+		return Q_HANDLED();
+	case BUTTON_DOWN_REPEAT_SIGNAL:
+		SERIALSTR("\r\nDown repeat\r\n");
+		DISPLAY_LINE2_ROM("Down repeat  ");
+		return Q_HANDLED();
 	}
 	return Q_SUPER(&QHsm_top);
 }

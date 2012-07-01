@@ -2,15 +2,29 @@
 #include "bsp.h"
 #include "dclock.h"
 
+/**
+ * @file Handle button presses, and send them to other active objects.
+ *
+ * @note Button 1 is select, button 2 is up, button 3 is down.  Conversion from
+ * button numbers to particular buttons is done in several places.
+ *
+ * @todo Decide if the button long press signals are really needed, or if
+ * consumers of button events can merely decide that there's been a long press
+ * if there were any repeats.
+ *
+ * @todo Do we need to send button up signals to consumers of button events?
+ */
 
-/** The number of ticks before we send a button long press event. */
-#define LONG_PRESS 50
+
+/** The number of ticks before we send a button long press event.  Based on
+    sampling the buttons at about 37 Hz (32/0.864).*/
+#define LONG_PRESS 30
 
 /** The number of ticks before we start sending button repeat events. */
-#define FIRST_REPEAT 40
+#define FIRST_REPEAT 18
 
 /** The number of ticks between button repeat events. */
-#define REPEAT_PERIOD 15
+#define REPEAT_PERIOD 7
 
 
 struct Buttons buttons;
@@ -23,14 +37,12 @@ static QState buttonLongState(struct Buttons *me);
 static QState buttonRepeatingState(struct Buttons *me);
 
 
-/* FIXME: add states to express the first repeat and extra repeats. */
-
-
 void
 buttons_ctor(void)
 {
 	QActive_ctor((QActive *)(&buttons), (QStateHandler)&buttonsInitial);
-
+	buttons.whichButton = 0;
+	buttons.repeatCount = 0;
 }
 
 
@@ -55,13 +67,13 @@ static QState buttonsState(struct Buttons *me)
 			QActive_post((QActive*)me, BUTTONS_UP_SIGNAL, 0);
 			break;
 		case 1:
-			QActive_post((QActive*)me, BUTTON_1_DOWN_SIGNAL, 1);
+			QActive_post((QActive*)me, BUTTON_1_SIGNAL, 1);
 			break;
 		case 2:
-			QActive_post((QActive*)me, BUTTON_2_DOWN_SIGNAL, 2);
+			QActive_post((QActive*)me, BUTTON_2_SIGNAL, 2);
 			break;
 		case 3:
-			QActive_post((QActive*)me, BUTTON_3_DOWN_SIGNAL, 3);
+			QActive_post((QActive*)me, BUTTON_3_SIGNAL, 3);
 			break;
 		}
 		break;
@@ -71,9 +83,9 @@ static QState buttonsState(struct Buttons *me)
 		me->repeatCount = 0;
 		break;
 
-	case BUTTON_1_DOWN_SIGNAL:
-	case BUTTON_2_DOWN_SIGNAL:
-	case BUTTON_3_DOWN_SIGNAL:
+	case BUTTON_1_SIGNAL:
+	case BUTTON_2_SIGNAL:
+	case BUTTON_3_SIGNAL:
 		button = (uint8_t)(Q_PAR(me));
 		if (0 == me->whichButton) {
 			me->whichButton = button;
@@ -107,33 +119,28 @@ static QState buttonDownState(struct Buttons *me)
 	uint8_t button;
 
 	switch (Q_SIG(me)) {
-
-	case BUTTONS_UP_SIGNAL:
-		/* If we have been monitoring this button for less than the
-		   long press period, send a single button press event.  If we
-		   have been monitoring this button for longer, long press and
-		   maybe repeat signals would have been sent from
-		   buttonLongState() and buttonRepeatingState(). */
+	case Q_ENTRY_SIG:
 		switch (me->whichButton) {
 		case 1:
 			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_1_PRESS_SIGNAL, 0);
+				     BUTTON_SELECT_PRESS_SIGNAL, 0);
 			break;
 		case 2:
 			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_2_PRESS_SIGNAL, 0);
+				     BUTTON_UP_PRESS_SIGNAL, 0);
 			break;
 		case 3:
 			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_3_PRESS_SIGNAL, 0);
+				     BUTTON_DOWN_PRESS_SIGNAL, 0);
 			break;
 		}
-		/* Return to the top state, as there are no buttons pressed. */
+
+	case BUTTONS_UP_SIGNAL:
 		return Q_TRAN(buttonsState);
 
-	case BUTTON_1_DOWN_SIGNAL:
-	case BUTTON_2_DOWN_SIGNAL:
-	case BUTTON_3_DOWN_SIGNAL:
+	case BUTTON_1_SIGNAL:
+	case BUTTON_2_SIGNAL:
+	case BUTTON_3_SIGNAL:
 		button = (uint8_t)(Q_PAR(me));
 		if (button != me->whichButton) {
 			/* Beached az! */
@@ -167,15 +174,15 @@ static QState buttonLongState(struct Buttons *me)
 		switch (me->whichButton) {
 		case 1:
 			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_1_LONG_PRESS_SIGNAL, 0);
+				     BUTTON_SELECT_LONG_PRESS_SIGNAL, 0);
 			break;
 		case 2:
 			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_2_LONG_PRESS_SIGNAL, 0);
+				     BUTTON_UP_LONG_PRESS_SIGNAL, 0);
 			break;
 		case 3:
 			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_3_LONG_PRESS_SIGNAL, 0);
+				     BUTTON_DOWN_LONG_PRESS_SIGNAL, 0);
 			break;
 		}
 		me->repeatCount = 0;
@@ -184,9 +191,9 @@ static QState buttonLongState(struct Buttons *me)
 	case BUTTONS_UP_SIGNAL:
 		return Q_TRAN(buttonsState);
 
-	case BUTTON_1_DOWN_SIGNAL:
-	case BUTTON_2_DOWN_SIGNAL:
-	case BUTTON_3_DOWN_SIGNAL:
+	case BUTTON_1_SIGNAL:
+	case BUTTON_2_SIGNAL:
+	case BUTTON_3_SIGNAL:
 		button = (uint8_t)(Q_PAR(me));
 		if (button != me->whichButton) {
 			return Q_TRAN(buttonsState);
@@ -221,9 +228,9 @@ static QState buttonRepeatingState(struct Buttons *me)
 	case BUTTONS_UP_SIGNAL:
 		return Q_TRAN(buttonsState);
 
-	case BUTTON_1_DOWN_SIGNAL:
-	case BUTTON_2_DOWN_SIGNAL:
-	case BUTTON_3_DOWN_SIGNAL:
+	case BUTTON_1_SIGNAL:
+	case BUTTON_2_SIGNAL:
+	case BUTTON_3_SIGNAL:
 		button = (uint8_t)(Q_PAR(me));
 		if (button != me->whichButton) {
 			/* Beached az! */
@@ -234,15 +241,15 @@ static QState buttonRepeatingState(struct Buttons *me)
 			switch (me->whichButton) {
 			case 1:
 				QActive_post(((QActive*)(&dclock)),
-					     BUTTON_1_REPEAT_SIGNAL, 0);
+					     BUTTON_SELECT_REPEAT_SIGNAL, 0);
 				break;
 			case 2:
 				QActive_post(((QActive*)(&dclock)),
-					     BUTTON_2_REPEAT_SIGNAL, 0);
+					     BUTTON_UP_REPEAT_SIGNAL, 0);
 				break;
 			case 3:
 				QActive_post(((QActive*)(&dclock)),
-					     BUTTON_3_REPEAT_SIGNAL, 0);
+					     BUTTON_DOWN_REPEAT_SIGNAL, 0);
 				break;
 			}
 			me->repeatCount = 0;
