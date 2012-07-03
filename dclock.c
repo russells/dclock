@@ -57,7 +57,9 @@ int main(int argc, char **argv)
 void dclock_ctor(void)
 {
 	QActive_ctor((QActive *)(&dclock), (QStateHandler)&dclockInitial);
-	dclock.dseconds = 12345;
+	/* Using this value as the initial time allows us to test the code that
+	   moves the time across the display each minute. */
+	dclock.dseconds = 11745;
 }
 
 
@@ -98,9 +100,10 @@ static QState dclockState(struct DClock *me)
 		return Q_HANDLED();
 
 	case TICK_DECIMAL_SIGNAL: {
-		char line[16];
+		char line[17];
 		uint32_t sec;
 		uint8_t h, m, s;
+		uint8_t spaces;
 
 		me->dseconds++;
 		if (me->dseconds >= 100000) {
@@ -114,7 +117,12 @@ static QState dclockState(struct DClock *me)
 		m = sec % 100;
 		sec /= 100;
 		h = sec % 100;
-		snprintf(line, 16, "%02u.%02u.%02u", h, m, s);
+		spaces = m % 9;
+		for (uint8_t i=0; i<spaces; i++) {
+			line[i] = ' ';
+		}
+		snprintf(line+spaces, 17-spaces, "%02u.%02u.%02u%s",
+			 h, m, s, "        ");
 		display_line1(line);
 		serial_send(line);
 		SERIALSTR("\r");
