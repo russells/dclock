@@ -69,6 +69,8 @@ static QState dclockInitial(struct DClock *me)
 
 static QState dclockState(struct DClock *me)
 {
+	uint8_t d32counter;
+
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		display_clear();
@@ -79,35 +81,45 @@ static QState dclockState(struct DClock *me)
 		BSP_watchdog(me);
 		return Q_HANDLED();
 	case TICK_DECIMAL_32_SIGNAL:
-		if (Q_PAR(me) >= 32) {
-			char line[16];
-			uint32_t sec;
-			uint8_t h, m, s;
-
+		d32counter = (uint8_t) Q_PAR(me);
+		Q_ASSERT( d32counter != 0 );
+		Q_ASSERT( d32counter <= 32 );
+		if (d32counter == 32) {
 			/* We set the decimal 1/32 second counter early, to
 			   avoid the possibility that the second calculations
 			   and display take much longer than the time before
 			   the next timer interrupt, and therefore before the
 			   next signal arrives. */
 			BSP_set_decimal_32_counter(0);
-			me->dseconds++;
-			if (me->dseconds >= 100000) {
-				me->dseconds = 0;
-			}
-
-			display_clear();
-			sec = me->dseconds;
-			s = sec % 100;
-			sec /= 100;
-			m = sec % 100;
-			sec /= 100;
-			h = sec % 100;
-			snprintf(line, 16, "%02u.%02u.%02u", h, m, s);
-			display_line1(line);
-			serial_send(line);
-			SERIALSTR("\r");
+			/* We've counted 32 parts of a decimal second, so tick
+			   over to the next second. */
+			QActive_post((QActive*)me, TICK_DECIMAL_SIGNAL, 0);
 		}
 		return Q_HANDLED();
+
+	case TICK_DECIMAL_SIGNAL: {
+		char line[16];
+		uint32_t sec;
+		uint8_t h, m, s;
+
+		me->dseconds++;
+		if (me->dseconds >= 100000) {
+			me->dseconds = 0;
+		}
+
+		display_clear();
+		sec = me->dseconds;
+		s = sec % 100;
+		sec /= 100;
+		m = sec % 100;
+		sec /= 100;
+		h = sec % 100;
+		snprintf(line, 16, "%02u.%02u.%02u", h, m, s);
+		display_line1(line);
+		serial_send(line);
+		SERIALSTR("\r");
+		return Q_HANDLED();
+	}
 
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		SERIALSTR("\r\nSelect\r\n");

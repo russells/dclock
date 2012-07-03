@@ -39,9 +39,13 @@ enum DClockSignals {
 	 */
 	WATCHDOG_SIGNAL,
 	/**
-	 * Send to the timekeeper 32 times a second.
+	 * Sent to the clock 32 times per decimal second.
 	 */
 	TICK_DECIMAL_32_SIGNAL,
+	/**
+	 * Sent to the clock once per decimal second.
+	 */
+	TICK_DECIMAL_SIGNAL,
 	MAX_PUB_SIG,
 	MAX_SIG,
 };
