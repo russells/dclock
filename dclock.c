@@ -4,7 +4,7 @@
 
 #include "dclock.h"
 #include "buttons.h"
-#include "display.h"
+#include "lcd.h"
 #include "serial.h"
 #include "version.h"
 #include "bsp.h"
@@ -44,7 +44,7 @@ int main(int argc, char **argv)
 	BSP_startmain();
 	serial_init();
 	serial_send_rom(startup_message);
-	display_init();
+	lcd_init();
 	dclock_ctor();
 	buttons_ctor();
 	BSP_init(); /* initialize the Board Support Package */
@@ -75,9 +75,9 @@ static QState dclockState(struct DClock *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		display_clear();
-		DISPLAY_LINE1_ROM("    A clock!");
-		DISPLAY_LINE2_ROM(V);
+		lcd_clear();
+		LCD_LINE1_ROM("    A clock!");
+		LCD_LINE2_ROM(V);
 		return Q_HANDLED();
 	case WATCHDOG_SIGNAL:
 		BSP_watchdog(me);
@@ -110,7 +110,7 @@ static QState dclockState(struct DClock *me)
 			me->dseconds = 0;
 		}
 
-		display_clear();
+		lcd_clear();
 		sec = me->dseconds;
 		s = sec % 100;
 		sec /= 100;
@@ -123,7 +123,7 @@ static QState dclockState(struct DClock *me)
 		}
 		snprintf(line+spaces, 17-spaces, "%02u.%02u.%02u%s",
 			 h, m, s, "        ");
-		display_line1(line);
+		lcd_line1(line);
 		serial_send(line);
 		SERIALSTR("\r");
 		return Q_HANDLED();
@@ -131,44 +131,44 @@ static QState dclockState(struct DClock *me)
 
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		SERIALSTR("\r\nSelect\r\n");
-		DISPLAY_LINE2_ROM("Select       ");
+		LCD_LINE2_ROM("Select       ");
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 		SERIALSTR("\r\nUp\r\n");
-		DISPLAY_LINE2_ROM("Up           ");
+		LCD_LINE2_ROM("Up           ");
 		BSP_inc_brightness();
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 		SERIALSTR("\r\nDown\r\n");
-		DISPLAY_LINE2_ROM("Down         ");
+		LCD_LINE2_ROM("Down         ");
 		BSP_dec_brightness();
 		return Q_HANDLED();
 
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 		SERIALSTR("\r\nSelect long\r\n");
-		DISPLAY_LINE2_ROM("Select long  ");
+		LCD_LINE2_ROM("Select long  ");
 		return Q_HANDLED();
 	case BUTTON_UP_LONG_PRESS_SIGNAL:
 		SERIALSTR("\r\nUp long\r\n");
-		DISPLAY_LINE2_ROM("Up long      ");
+		LCD_LINE2_ROM("Up long      ");
 		return Q_HANDLED();
 	case BUTTON_DOWN_LONG_PRESS_SIGNAL:
 		SERIALSTR("\r\nDown long\r\n");
-		DISPLAY_LINE2_ROM("Down long    ");
+		LCD_LINE2_ROM("Down long    ");
 		return Q_HANDLED();
 
 	case BUTTON_SELECT_REPEAT_SIGNAL:
 		SERIALSTR("\r\nSelect repeat\r\n");
-		DISPLAY_LINE2_ROM("Select repeat");
+		LCD_LINE2_ROM("Select repeat");
 		return Q_HANDLED();
 	case BUTTON_UP_REPEAT_SIGNAL:
 		SERIALSTR("\r\nUp repeat\r\n");
-		DISPLAY_LINE2_ROM("Up repeat    ");
+		LCD_LINE2_ROM("Up repeat    ");
 		BSP_inc_brightness();
 		return Q_HANDLED();
 	case BUTTON_DOWN_REPEAT_SIGNAL:
 		SERIALSTR("\r\nDown repeat\r\n");
-		DISPLAY_LINE2_ROM("Down repeat  ");
+		LCD_LINE2_ROM("Down repeat  ");
 		BSP_dec_brightness();
 		return Q_HANDLED();
 	}

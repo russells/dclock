@@ -1,10 +1,10 @@
 /**
  * @file
  *
- * Manage the HD44780 display on the Freetronics LCD Keypad Shield.
+ * Manage the HD44780 LCD on the Freetronics LCD Keypad Shield.
  */
 
-#include "display.h"
+#include "lcd.h"
 #include "cpu-speed.h"
 #include "qpn_port.h"
 #include <util/delay.h>
@@ -93,7 +93,7 @@ Q_DEFINE_THIS_FILE;
 static void one_char(uint8_t rs, char c);
 
 
-void display_init(void)
+void lcd_init(void)
 {
 	/* The HD44780 takes 10ms to start. */
 	_delay_ms(10);
@@ -132,14 +132,14 @@ void display_init(void)
 /**
  * Turn off interrupts, display a file name and line number, stop.
  */
-void display_assert(char const Q_ROM * const Q_ROM_VAR file, int line)
+void lcd_assert(char const Q_ROM * const Q_ROM_VAR file, int line)
 {
 	cli();
 	wdt_disable();
-	display_clear();
+	lcd_clear();
 	_delay_ms(10);
-	DISPLAY_LINE1_ROM("ASSERT: ");
-	display_setpos(0, 8);
+	LCD_LINE1_ROM("ASSERT: ");
+	lcd_setpos(0, 8);
 	if (line) {
 		char number[8];
 		char *cp = number+7;
@@ -156,7 +156,7 @@ void display_assert(char const Q_ROM * const Q_ROM_VAR file, int line)
 	} else {
 		one_char(1, '0');
 	}
-	display_setpos(1, 0);
+	lcd_setpos(1, 0);
 	for (uint8_t i=0; i<16; i++) {
 		char c = Q_ROM_BYTE(file[i]);
 		if (! c)
@@ -172,14 +172,14 @@ void display_assert(char const Q_ROM * const Q_ROM_VAR file, int line)
 }
 
 
-void display_clear(void)
+void lcd_clear(void)
 {
 	one_char(0, 0x01);
 	_delay_ms(2);
 }
 
 
-void display_setpos(uint8_t line, uint8_t pos)
+void lcd_setpos(uint8_t line, uint8_t pos)
 {
 	Q_ASSERT( line < 2 );
 	Q_ASSERT( pos < 15 );
@@ -192,25 +192,25 @@ void display_setpos(uint8_t line, uint8_t pos)
 }
 
 
-void display_line1(const char *line)
+void lcd_line1(const char *line)
 {
-	display_setpos(0, 0);
+	lcd_setpos(0, 0);
 	for (uint8_t i=0; i<16 && line[i]; i++) {
 		one_char(1, line[i]);
 	}
 }
 
 
-void display_line2(const char *line)
+void lcd_line2(const char *line)
 {
-	display_setpos(1, 0);
+	lcd_setpos(1, 0);
 	for (uint8_t i=0; i<16 && line[i]; i++) {
 		one_char(1, line[i]);
 	}
 }
 
 
-void display_line1_rom(char const Q_ROM * const Q_ROM_VAR s)
+void lcd_line1_rom(char const Q_ROM * const Q_ROM_VAR s)
 {
 	static char line[16];
 	uint8_t i;
@@ -227,11 +227,11 @@ void display_line1_rom(char const Q_ROM * const Q_ROM_VAR s)
 		}
 		line[i] = c;
 	}
-	display_line1(line);
+	lcd_line1(line);
 }
 
 
-void display_line2_rom(char const Q_ROM * const Q_ROM_VAR s)
+void lcd_line2_rom(char const Q_ROM * const Q_ROM_VAR s)
 {
 	static char line[16];
 	uint8_t i;
@@ -248,7 +248,7 @@ void display_line2_rom(char const Q_ROM * const Q_ROM_VAR s)
 		}
 		line[i] = c;
 	}
-	display_line2(line);
+	lcd_line2(line);
 }
 
 
