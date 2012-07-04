@@ -192,6 +192,19 @@ void lcd_setpos(uint8_t line, uint8_t pos)
 }
 
 
+void lcd_set_cursor(uint8_t line, uint8_t pos)
+{
+	lcd_setpos(line, pos);
+	one_char(0, 0b00001111);	/* Display on, Cursor on, Blink on */
+}
+
+
+void lcd_cursor_off(void)
+{
+	one_char(0, 0b00001100);	/* Display on, Cursor on, Blink off */
+}
+
+
 void lcd_line1(const char *line)
 {
 	lcd_setpos(0, 0);

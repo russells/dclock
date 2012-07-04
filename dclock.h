@@ -46,6 +46,17 @@ enum DClockSignals {
 	 * Sent to the clock once per decimal second.
 	 */
 	TICK_DECIMAL_SIGNAL,
+	/**
+	 * Sent when the user is setting the time and the time is changed.
+	 */
+	UPDATE_TIME_SET_SIGNAL,
+	/**
+	 * Sent when the user is setting the time and we need to update the lcd
+	 * cursor position to indicate to the user what value is being changed.
+	 * This happens when each time setting state (hours, minutes, or
+	 * seconds) is entered, and when the time has been changed.
+	 */
+	UPDATE_TIME_SET_CURSOR_SIGNAL,
 	MAX_PUB_SIG,
 	MAX_SIG,
 };
@@ -61,6 +72,18 @@ void dclock_ctor(void);
 struct DClock {
 	QActive super;
 	uint32_t dseconds;
+	/** Set false when we enter the time setting states, true when we
+	    change the time in the time setting states.  Used to decide whether
+	    or not to set the current time after we've finished in the time
+	    setting states.  Later, will also indicate whether we update the
+	    time in the RTC when we exit those states.  */
+	uint8_t timeSetChanged;
+	/** The new hours set time used by the time setting states. */
+	uint8_t setHours;
+	/** The new minutes set time used by the time setting states. */
+	uint8_t setMinutes;
+	/** The new seconds set time used by the time setting states. */
+	uint8_t setSeconds;
 };
 
 

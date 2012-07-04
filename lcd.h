@@ -7,6 +7,8 @@
 void lcd_init(void);
 void lcd_clear(void);
 void lcd_setpos(uint8_t line, uint8_t pos);
+void lcd_set_cursor(uint8_t line, uint8_t pos);
+void lcd_cursor_off(void);
 void lcd_line1(const char *line);
 void lcd_line1_rom(char const Q_ROM * const Q_ROM_VAR s);
 void lcd_line2(const char *line);
