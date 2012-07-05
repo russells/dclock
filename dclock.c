@@ -22,7 +22,6 @@ Q_DEFINE_THIS_FILE;
 static QState dclockInitial          (struct DClock *me);
 static QState dclockState            (struct DClock *me);
 static QState dclockSetState         (struct DClock *me);
-static QState dclockSetUpdatingState (struct DClock *me);
 static QState dclockSetHoursState    (struct DClock *me);
 static QState dclockSetMinutesState  (struct DClock *me);
 static QState dclockSetSecondsState  (struct DClock *me);
@@ -100,6 +99,29 @@ static void inc_dseconds(struct DClock *me)
 }
 
 
+static void displayTime(struct DClock *me)
+{
+	char line[17];
+	uint32_t sec;
+	uint8_t h, m, s;
+	uint8_t spaces;
+
+	sec = me->dseconds;
+	s = sec % 100;
+	sec /= 100;
+	m = sec % 100;
+	sec /= 100;
+	h = sec % 100;
+	spaces = m % 9;
+	for (uint8_t i=0; i<spaces; i++) {
+		line[i] = ' ';
+	}
+	snprintf(line+spaces, 17-spaces, "%02u.%02u.%02u%s",
+		 h, m, s, "        ");
+	lcd_line1(line);
+}
+
+
 static QState dclockState(struct DClock *me)
 {
 	uint8_t d32counter;
@@ -130,27 +152,8 @@ static QState dclockState(struct DClock *me)
 		return Q_HANDLED();
 
 	case TICK_DECIMAL_SIGNAL: {
-		char line[17];
-		uint32_t sec;
-		uint8_t h, m, s;
-		uint8_t spaces;
-
 		inc_dseconds(me);
-
-		//lcd_clear();
-		sec = me->dseconds;
-		s = sec % 100;
-		sec /= 100;
-		m = sec % 100;
-		sec /= 100;
-		h = sec % 100;
-		spaces = m % 9;
-		for (uint8_t i=0; i<spaces; i++) {
-			line[i] = ' ';
-		}
-		snprintf(line+spaces, 17-spaces, "%02u.%02u.%02u%s",
-			 h, m, s, "        ");
-		lcd_line1(line);
+		displayTime(me);
 		return Q_HANDLED();
 	}
 
@@ -179,6 +182,49 @@ static void displaySettingTime(struct DClock *me)
 }
 
 
+/**
+ * Display a string followed by a space and a number of dots on the bottom of
+ * the LCD.
+ *
+ * The string is stored in ROM.
+ *
+ * We rashly assume that the strings is less than eight chars long ("Hours",
+ * "Minutes", or "Seconds"), which gives room for eight dots.
+ */
+static void displayNameDots(struct DClock *me)
+{
+	char line[17];
+	uint8_t i;
+	char c;
+	uint8_t ndots = me->setTimeouts;
+
+	Q_ASSERT( ndots <= 8 );
+
+	i = 0;
+	while ( (c=Q_ROM_BYTE(me->setTimeName[i])) ) {
+		line[i] = c;
+		i++;
+	}
+	line[i++] = ' ';
+	while (ndots--) {
+		line[i++] = '.';
+	}
+	while (i < 16) {
+		line[i++] = ' ';
+	}
+	line[i] = '\0';
+	Q_ASSERT( line[16] == '\0' );
+	lcd_line2(line);
+}
+
+
+/** Wait two seconds in the time setting states between changes of dots. */
+#define TSET_TOUT (37*2)
+
+/** Have five dots of timeout in the time setting states. */
+#define N_TSET_TOUTS 5
+
+
 static QState dclockSetState(struct DClock *me)
 {
 	switch (Q_SIG(me)) {
@@ -204,7 +250,15 @@ static QState dclockSetState(struct DClock *me)
 		inc_dseconds(me);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_SIGNAL:
+		/* We get this whenever the user changes one of the hours,
+		   mintues, or seconds.  We have to change the displayed
+		   setting time, reset the timeouts, and re-display the name
+		   and dots. */
+		me->timeSetChanged = 73; /* Need a true value?  Why not 73? */
+		me->setTimeouts = N_TSET_TOUTS;
+		QActive_arm((QActive*)me, TSET_TOUT);
 		displaySettingTime(me);
+		displayNameDots(me);
 		fff(me);
 		QActive_post((QActive*)me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		return Q_HANDLED();
@@ -216,7 +270,34 @@ static QState dclockSetState(struct DClock *me)
 		   may do things with them that will interfere with time
 		   setting. */
 		return Q_HANDLED();
+	case UPDATE_TIME_TIMEOUT_SIGNAL:
+		/* Any of our child states can time out.  When they do, we get
+		   this signal to tell us that, and we abort the time
+		   setting. */
+		me->timeSetChanged = 0;
+		return Q_TRAN(dclockState);
+	case Q_TIMEOUT_SIG:
+		/* The three child states that set the hours, minutes, and
+		   seconds, all arm the timer and set the number of timeouts.
+		   At each Q_TIMEOUT_SIG we display a decreasing number of dots
+		   (by decrementing setTimeouts and using that to count dots.
+		   When that gets to zero, we give up, by sending ourselves the
+		   signal that indicates that. */
+		Q_ASSERT( me->setTimeouts );
+		me->setTimeouts --;
+		if (0 == me->setTimeouts) {
+			fff(me);
+			QActive_post((QActive*)me, UPDATE_TIME_TIMEOUT_SIGNAL,
+				     0);
+		} else {
+			displayNameDots(me);
+			/* FIXME: make the minutes and seconds states the
+			   same. */
+			QActive_arm((QActive*)me, TSET_TOUT);
+		}
+		return Q_HANDLED();
 	case Q_EXIT_SIG:
+		QActive_disarm((QActive*)me);
 		/* These three values are all unsigned and can all be zero, so
 		   we don't need to check the lower bound. */
 		Q_ASSERT( me->setHours <= 9 );
@@ -228,32 +309,23 @@ static QState dclockSetState(struct DClock *me)
 			me->dseconds = (me->setHours * 10000L)
 				+ (me->setMinutes * 100L) + me->setSeconds;
 		}
+		displayTime(me);
 		return Q_HANDLED();
 	}
 	return Q_SUPER(dclockState);
 }
 
 
-static QState dclockSetUpdatingState(struct DClock *me)
-{
-	switch (Q_SIG(me)) {
-	case UPDATE_TIME_SET_SIGNAL:
-		/* When any of the child states update the time variables, they
-		   generate this signal.  We want to note that the time has
-		   changed, and then let our parent state change the time on
-		   the display. */
-		me->timeSetChanged = 73; /* Need a true value?  Why not 73? */
-		return Q_SUPER(dclockSetState);
-	}
-	return Q_SUPER(dclockSetState);
-}
-
-
 static QState dclockSetHoursState(struct DClock *me)
 {
+	static const char PROGMEM setTimeHoursName[] = "Hours";
+
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		LCD_LINE2_ROM("Setting hours   ");
+		QActive_arm((QActive*)me, TSET_TOUT);
+		me->setTimeouts = N_TSET_TOUTS;
+		me->setTimeName = setTimeHoursName;
+		displayNameDots(me);
 		lcd_set_cursor(0, 1);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
@@ -284,19 +356,25 @@ static QState dclockSetHoursState(struct DClock *me)
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(dclockSetMinutesState);
 	}
-	return Q_SUPER(dclockSetUpdatingState);
+	return Q_SUPER(dclockSetState);
 }
 
 
 static QState dclockSetMinutesState(struct DClock *me)
 {
+	static const char PROGMEM setTimeMinutesName[] = "Minutes";
+
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		LCD_LINE2_ROM("Setting minutes ");
+		QActive_arm((QActive*)me, TSET_TOUT);
+		me->setTimeouts = N_TSET_TOUTS;
+		me->setTimeName = setTimeMinutesName;
+		displayNameDots(me);
 		lcd_set_cursor(0, 4);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
+		QActive_arm((QActive*)me, TSET_TOUT);
 		Q_ASSERT( me->setMinutes <= 99 );
 		if (99 == me->setMinutes) {
 			me->setMinutes = 0;
@@ -308,6 +386,7 @@ static QState dclockSetMinutesState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
+		QActive_arm((QActive*)me, TSET_TOUT);
 		Q_ASSERT( me->setMinutes <= 99 );
 		if (0 == me->setMinutes) {
 			me->setMinutes = 99;
@@ -323,19 +402,24 @@ static QState dclockSetMinutesState(struct DClock *me)
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(dclockSetSecondsState);
 	}
-	return Q_SUPER(dclockSetUpdatingState);
+	return Q_SUPER(dclockSetState);
 }
 
 
 static QState dclockSetSecondsState(struct DClock *me)
 {
+	static const char PROGMEM setTimeSecondsName[] = "Seconds";
+
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		LCD_LINE2_ROM("Setting seconds ");
+		QActive_arm((QActive*)me, TSET_TOUT);
+		me->setTimeouts = N_TSET_TOUTS;
+		me->setTimeName = setTimeSecondsName;
 		lcd_set_cursor(0, 7);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
+		QActive_arm((QActive*)me, TSET_TOUT);
 		Q_ASSERT( me->setSeconds <= 99 );
 		if (99 == me->setSeconds) {
 			me->setSeconds = 0;
@@ -347,6 +431,7 @@ static QState dclockSetSecondsState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
+		QActive_arm((QActive*)me, TSET_TOUT);
 		Q_ASSERT( me->setSeconds <= 99 );
 		if (0 == me->setSeconds) {
 			me->setSeconds = 99;
@@ -362,5 +447,5 @@ static QState dclockSetSecondsState(struct DClock *me)
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(dclockState);
 	}
-	return Q_SUPER(dclockSetUpdatingState);
+	return Q_SUPER(dclockSetState);
 }

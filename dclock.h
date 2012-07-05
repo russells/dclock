@@ -57,6 +57,11 @@ enum DClockSignals {
 	 * seconds) is entered, and when the time has been changed.
 	 */
 	UPDATE_TIME_SET_CURSOR_SIGNAL,
+	/**
+	 * Sent when the time setting states get no input for a while and time
+	 * out.
+	 */
+	UPDATE_TIME_TIMEOUT_SIGNAL,
 	MAX_PUB_SIG,
 	MAX_SIG,
 };
@@ -84,6 +89,10 @@ struct DClock {
 	uint8_t setMinutes;
 	/** The new seconds set time used by the time setting states. */
 	uint8_t setSeconds;
+	/** Count timeouts in the time setting states. */
+	uint8_t setTimeouts;
+	/** The name in the lcd when we are setting a time value. */
+	char const Q_ROM * Q_ROM_VAR setTimeName;
 };
 
 
