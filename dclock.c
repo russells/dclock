@@ -374,7 +374,6 @@ static QState dclockSetMinutesState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
-		QActive_arm((QActive*)me, TSET_TOUT);
 		Q_ASSERT( me->setMinutes <= 99 );
 		if (99 == me->setMinutes) {
 			me->setMinutes = 0;
@@ -386,7 +385,6 @@ static QState dclockSetMinutesState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
-		QActive_arm((QActive*)me, TSET_TOUT);
 		Q_ASSERT( me->setMinutes <= 99 );
 		if (0 == me->setMinutes) {
 			me->setMinutes = 99;
@@ -415,11 +413,11 @@ static QState dclockSetSecondsState(struct DClock *me)
 		QActive_arm((QActive*)me, TSET_TOUT);
 		me->setTimeouts = N_TSET_TOUTS;
 		me->setTimeName = setTimeSecondsName;
+		displayNameDots(me);
 		lcd_set_cursor(0, 7);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
-		QActive_arm((QActive*)me, TSET_TOUT);
 		Q_ASSERT( me->setSeconds <= 99 );
 		if (99 == me->setSeconds) {
 			me->setSeconds = 0;
@@ -431,7 +429,6 @@ static QState dclockSetSecondsState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
-		QActive_arm((QActive*)me, TSET_TOUT);
 		Q_ASSERT( me->setSeconds <= 99 );
 		if (0 == me->setSeconds) {
 			me->setSeconds = 99;
