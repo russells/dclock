@@ -161,11 +161,11 @@ static QState dclockState(struct DClock *me)
 		return Q_TRAN(dclockSetHoursState);
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
-		BSP_inc_brightness();
+		lcd_inc_brightness();
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
-		BSP_dec_brightness();
+		lcd_dec_brightness();
 		return Q_HANDLED();
 	}
 	return Q_SUPER(&QHsm_top);

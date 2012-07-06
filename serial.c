@@ -312,7 +312,7 @@ int serial_send_hex_int(unsigned int x)
 	char buf[10];
 	char *bufp;
 
-	static PROGMEM char hexchars[] = "0123456789ABCDEF";
+	static const PROGMEM char hexchars[] = "0123456789ABCDEF";
 
 	bufp = buf + 9;
 	*bufp = '\0';

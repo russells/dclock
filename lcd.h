@@ -13,6 +13,8 @@ void lcd_line1(const char *line);
 void lcd_line1_rom(char const Q_ROM * const Q_ROM_VAR s);
 void lcd_line2(const char *line);
 void lcd_line2_rom(char const Q_ROM * const Q_ROM_VAR s);
+void lcd_inc_brightness(void);
+void lcd_dec_brightness(void);
 void lcd_assert(char const Q_ROM * const Q_ROM_VAR file, int line);
 
 

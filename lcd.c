@@ -5,6 +5,7 @@
  */
 
 #include "lcd.h"
+#include "bsp.h"
 #include "cpu-speed.h"
 #include "qpn_port.h"
 #include <util/delay.h>
@@ -33,9 +34,23 @@ Q_DEFINE_THIS_FILE;
 #define D7_DDR  DDRD
 #define D7_BIT  7
 
-#define BRIGHT_PORT PORTD
-#define BRIGHT_DDR  DDRD
-#define BRIGHT_BIT  3
+
+#define BRIGHTNESS_0 0
+/** A PWM value of 0 in the timer results in a one cycle pulse from the output
+    pin, which is the minimum brightness we can get, apart from "off". */
+#define BRIGHTNESS_1 0
+/** The default brightness at startup. */
+#define BRIGHTNESS_2 18
+#define BRIGHTNESS_3 70
+/** Full brightness. */
+#define BRIGHTNESS_4 255
+
+
+/** The current brightness level.  This is distinct from the PWM value for the
+    timer because level 0 is handled differently.  We essentially need two zero
+    levels for PWM, since a PWM level of zero results in a one cycle pulse.  To
+    really turn off the back light we need to disconnect the timer PWM. */
+static uint8_t brightness;
 
 
 /** Set an IO bit. */
@@ -95,6 +110,10 @@ static void one_char(uint8_t rs, char c);
 
 void lcd_init(void)
 {
+	brightness = 2;
+	BSP_lcd_init(BRIGHTNESS_2);
+	BSP_lcd_pwm_on();
+
 	/* The HD44780 takes 10ms to start. */
 	_delay_ms(10);
 
@@ -112,10 +131,6 @@ void lcd_init(void)
 	D5(1);
 	D6(1);
 	D7(1);
-	/* Set the backlight on. */
-	/** @todo PWM control of display brightness. */
-	SB(BRIGHT_DDR, BRIGHT_BIT);
-	SB(BRIGHT_PORT, BRIGHT_BIT);
 
 	one_char(0, 0x01);	/* Clear display */
 	_delay_ms(1.6);
@@ -299,4 +314,68 @@ static void one_char(uint8_t rs, char c)
 	_delay_us(37);
 
 	SREG = sreg;
+}
+
+
+void lcd_inc_brightness(void)
+{
+	switch (brightness) {
+	case 0:
+		brightness = 1;
+		BSP_lcd_pwm(BRIGHTNESS_1);
+		BSP_lcd_pwm_on();
+		break;
+	case 1:
+		brightness = 2;
+		BSP_lcd_pwm(BRIGHTNESS_2);
+		BSP_lcd_pwm_on();
+		break;
+	case 2:
+		brightness = 3;
+		BSP_lcd_pwm(BRIGHTNESS_3);
+		BSP_lcd_pwm_on();
+		break;
+	case 3:
+		brightness = 4;
+		BSP_lcd_pwm(BRIGHTNESS_4);
+		BSP_lcd_pwm_on();
+		break;
+	case 4:
+		break;
+	default:
+		Q_ASSERT( 0 );
+		break;
+	}
+}
+
+
+void lcd_dec_brightness(void)
+{
+	switch (brightness) {
+	case 0:
+		break;
+	case 1:
+		brightness = 0;
+		BSP_lcd_pwm(BRIGHTNESS_0);
+		BSP_lcd_pwm_off();
+		break;
+	case 2:
+		brightness = 1;
+		BSP_lcd_pwm(BRIGHTNESS_1);
+		BSP_lcd_pwm_on();
+		break;
+	case 3:
+		brightness = 2;
+		BSP_lcd_pwm(BRIGHTNESS_2);
+		BSP_lcd_pwm_on();
+		break;
+	case 4:
+		brightness = 3;
+		BSP_lcd_pwm(BRIGHTNESS_3);
+		BSP_lcd_pwm_on();
+		break;
+	default:
+		Q_ASSERT( 0 );
+		break;
+	}
 }
