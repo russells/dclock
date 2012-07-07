@@ -321,24 +321,16 @@ void lcd_inc_brightness(void)
 {
 	switch (brightness) {
 	case 0:
-		brightness = 1;
-		BSP_lcd_pwm(BRIGHTNESS_1);
-		BSP_lcd_pwm_on();
+		lcd_set_brightness(1);
 		break;
 	case 1:
-		brightness = 2;
-		BSP_lcd_pwm(BRIGHTNESS_2);
-		BSP_lcd_pwm_on();
+		lcd_set_brightness(2);
 		break;
 	case 2:
-		brightness = 3;
-		BSP_lcd_pwm(BRIGHTNESS_3);
-		BSP_lcd_pwm_on();
+		lcd_set_brightness(3);
 		break;
 	case 3:
-		brightness = 4;
-		BSP_lcd_pwm(BRIGHTNESS_4);
-		BSP_lcd_pwm_on();
+		lcd_set_brightness(4);
 		break;
 	case 4:
 		break;
@@ -355,29 +347,51 @@ void lcd_dec_brightness(void)
 	case 0:
 		break;
 	case 1:
-		brightness = 0;
-		BSP_lcd_pwm(BRIGHTNESS_0);
-		BSP_lcd_pwm_off();
+		lcd_set_brightness(0);
 		break;
 	case 2:
-		brightness = 1;
-		BSP_lcd_pwm(BRIGHTNESS_1);
-		BSP_lcd_pwm_on();
+		lcd_set_brightness(1);
 		break;
 	case 3:
-		brightness = 2;
-		BSP_lcd_pwm(BRIGHTNESS_2);
-		BSP_lcd_pwm_on();
+		lcd_set_brightness(2);
 		break;
 	case 4:
-		brightness = 3;
-		BSP_lcd_pwm(BRIGHTNESS_3);
-		BSP_lcd_pwm_on();
+		lcd_set_brightness(3);
 		break;
 	default:
 		Q_ASSERT( 0 );
 		break;
 	}
+}
+
+
+void lcd_set_brightness(uint8_t b)
+{
+	Q_ASSERT( b < 5 );
+
+	switch (b) {
+	case 0:
+		BSP_lcd_pwm(BRIGHTNESS_0);
+		BSP_lcd_pwm_off();
+		break;
+	case 1:
+		BSP_lcd_pwm(BRIGHTNESS_1);
+		BSP_lcd_pwm_on();
+		break;
+	case 2:
+		BSP_lcd_pwm(BRIGHTNESS_2);
+		BSP_lcd_pwm_on();
+		break;
+	case 3:
+		BSP_lcd_pwm(BRIGHTNESS_3);
+		BSP_lcd_pwm_on();
+		break;
+	case 4:
+		BSP_lcd_pwm(BRIGHTNESS_4);
+		BSP_lcd_pwm_on();
+		break;
+	}
+	brightness = b;
 }
 
 

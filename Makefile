@@ -53,7 +53,7 @@ CFLAGS  = -c -gdwarf-2 -std=gnu99 -Os -fsigned-char -fshort-enums \
 	-DV='"$V"' -DD='"$D"'
 LINKFLAGS = -gdwarf-2 -Os -mmcu=$(TARGET_MCU)
 
-SRCS = dclock.c buttons.c lcd.c serial.c bsp-avr.c qepn.c qfn.c
+SRCS = dclock.c buttons.c alarm.c lcd.c serial.c bsp-avr.c qepn.c qfn.c
 
 SRC_OBJS = $(SRCS:.c=.o)
 SRC_DEPS = $(SRCS:.c=.d)

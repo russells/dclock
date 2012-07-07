@@ -4,6 +4,7 @@
 
 #include "dclock.h"
 #include "buttons.h"
+#include "alarm.h"
 #include "lcd.h"
 #include "serial.h"
 #include "version.h"
@@ -30,11 +31,13 @@ static QState dclockSetSecondsState  (struct DClock *me);
 
 static QEvent dclockQueue[4];
 static QEvent buttonsQueue[4];
+static QEvent alarmQueue[4];
 
 QActiveCB const Q_ROM Q_ROM_VAR QF_active[] = {
 	{ (QActive *)0              , (QEvent *)0      , 0                        },
 	{ (QActive *)(&buttons)     , buttonsQueue     , Q_DIM(buttonsQueue)      },
 	{ (QActive *)(&dclock)      , dclockQueue      , Q_DIM(dclockQueue)       },
+	{ (QActive *)(&alarm)       , alarmQueue       , Q_DIM(alarmQueue)        },
 };
 /* If QF_MAX_ACTIVE is incorrectly defined, the compiler says something like:
    lapclock.c:68: error: size of array ‘Q_assert_compile’ is negative
@@ -52,6 +55,7 @@ int main(int argc, char **argv)
 	lcd_init();
 	dclock_ctor();
 	buttons_ctor();
+	alarm_ctor();
 	BSP_init(); /* initialize the Board Support Package */
 
 	QF_run();
@@ -151,11 +155,11 @@ static QState dclockState(struct DClock *me)
 		}
 		return Q_HANDLED();
 
-	case TICK_DECIMAL_SIGNAL: {
+	case TICK_DECIMAL_SIGNAL:
 		inc_dseconds(me);
 		displayTime(me);
+		post(&alarm, TICK_DECIMAL_SIGNAL, me->dseconds);
 		return Q_HANDLED();
-	}
 
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		if (lcd_get_brightness()) {

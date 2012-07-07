@@ -1,4 +1,5 @@
 #include "buttons.h"
+#include "alarm.h"
 #include "serial.h"
 #include "bsp.h"
 #include "dclock.h"
@@ -126,13 +127,13 @@ static QState buttonDownState(struct Buttons *me)
 	case Q_ENTRY_SIG:
 		switch (me->whichButton) {
 		case 1:
-			post(&dclock, BUTTON_SELECT_PRESS_SIGNAL, 0);
+			post(&alarm, BUTTON_SELECT_PRESS_SIGNAL, 0);
 			break;
 		case 2:
-			post(&dclock, BUTTON_UP_PRESS_SIGNAL, 0);
+			post(&alarm, BUTTON_UP_PRESS_SIGNAL, 0);
 			break;
 		case 3:
-			post(&dclock, BUTTON_DOWN_PRESS_SIGNAL, 0);
+			post(&alarm, BUTTON_DOWN_PRESS_SIGNAL, 0);
 			break;
 		}
 
@@ -160,13 +161,13 @@ static QState buttonDownState(struct Buttons *me)
 	case Q_EXIT_SIG:
 		switch (me->whichButton) {
 		case 1:
-			post(&dclock, BUTTON_SELECT_RELEASE_SIGNAL, 0);
+			post(&alarm, BUTTON_SELECT_RELEASE_SIGNAL, 0);
 			break;
 		case 2:
-			post(&dclock, BUTTON_UP_RELEASE_SIGNAL, 0);
+			post(&alarm, BUTTON_UP_RELEASE_SIGNAL, 0);
 			break;
 		case 3:
-			post(&dclock, BUTTON_DOWN_RELEASE_SIGNAL, 0);
+			post(&alarm, BUTTON_DOWN_RELEASE_SIGNAL, 0);
 			break;
 		}
 		me->whichButton = 0;
@@ -185,13 +186,13 @@ static QState buttonLongState(struct Buttons *me)
 	case Q_ENTRY_SIG:
 		switch (me->whichButton) {
 		case 1:
-			post(&dclock, BUTTON_SELECT_LONG_PRESS_SIGNAL, 0);
+			post(&alarm, BUTTON_SELECT_LONG_PRESS_SIGNAL, 0);
 			break;
 		case 2:
-			post(&dclock, BUTTON_UP_LONG_PRESS_SIGNAL, 0);
+			post(&alarm, BUTTON_UP_LONG_PRESS_SIGNAL, 0);
 			break;
 		case 3:
-			post(&dclock, BUTTON_DOWN_LONG_PRESS_SIGNAL, 0);
+			post(&alarm, BUTTON_DOWN_LONG_PRESS_SIGNAL, 0);
 			break;
 		}
 		me->repeatCount = 0;
@@ -244,13 +245,13 @@ static QState buttonRepeatingState(struct Buttons *me)
 		if (me->repeatCount >= REPEAT_PERIOD) {
 			switch (me->whichButton) {
 			case 1:
-				post(&dclock, BUTTON_SELECT_REPEAT_SIGNAL, 0);
+				post(&alarm, BUTTON_SELECT_REPEAT_SIGNAL, 0);
 				break;
 			case 2:
-				post(&dclock, BUTTON_UP_REPEAT_SIGNAL, 0);
+				post(&alarm, BUTTON_UP_REPEAT_SIGNAL, 0);
 				break;
 			case 3:
-				post(&dclock, BUTTON_DOWN_REPEAT_SIGNAL, 0);
+				post(&alarm, BUTTON_DOWN_REPEAT_SIGNAL, 0);
 				break;
 			}
 			me->repeatCount = 0;
