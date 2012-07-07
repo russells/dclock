@@ -91,8 +91,6 @@ struct DClock {
 	uint8_t setSeconds;
 	/** Count timeouts in the time setting states. */
 	uint8_t setTimeouts;
-	/** The name in the lcd when we are setting a time value. */
-	char const Q_ROM * Q_ROM_VAR setTimeName;
 };
 
 

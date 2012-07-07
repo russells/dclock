@@ -174,46 +174,47 @@ static QState dclockState(struct DClock *me)
 static void displaySettingTime(struct DClock *me)
 {
 	char line[17];
+	uint8_t i;
+	uint8_t dots;
+
 	snprintf(line, 17, "%02u.%02u.%02u        ", me->setHours,
 		 me->setMinutes, me->setSeconds);
-	Q_ASSERT( strlen(line) <= 16 );
-	lcd_line1(line);
+	Q_ASSERT( strlen(line) == 16 );
+	i = 9;
+	dots = me->setTimeouts;
+	Q_ASSERT( dots <= 7 );
+	while (dots--) {
+		line[i++] = '.';
+	}
+	Q_ASSERT( i <= 16 );
+	Q_ASSERT( line[16] == '\0' );
+	lcd_line2(line);
 }
 
 
 /**
- * Display a string followed by a space and a number of dots on the bottom of
- * the LCD.
+ * Display a string on the top line of the LCD.
  *
  * The string is stored in ROM.
- *
- * We rashly assume that the strings is less than eight chars long ("Hours",
- * "Minutes", or "Seconds"), which gives room for eight dots.
  */
-static void displayNameDots(struct DClock *me)
+static void displayMenuName(const char PROGMEM *name)
 {
 	char line[17];
 	uint8_t i;
 	char c;
-	uint8_t ndots = me->setTimeouts;
-
-	Q_ASSERT( ndots <= 8 );
 
 	i = 0;
-	while ( (c=Q_ROM_BYTE(me->setTimeName[i])) ) {
+	while ( (c=Q_ROM_BYTE(name[i])) ) {
 		line[i] = c;
 		i++;
 	}
-	line[i++] = ' ';
-	while (ndots--) {
-		line[i++] = '.';
-	}
+	Q_ASSERT( i < 16 );
 	while (i < 16) {
 		line[i++] = ' ';
 	}
 	line[i] = '\0';
 	Q_ASSERT( line[16] == '\0' );
-	lcd_line2(line);
+	lcd_line1(line);
 }
 
 
@@ -257,7 +258,6 @@ static QState dclockSetState(struct DClock *me)
 		me->setTimeouts = N_TSET_TOUTS;
 		QActive_arm((QActive*)me, TSET_TOUT);
 		displaySettingTime(me);
-		displayNameDots(me);
 		post(me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
@@ -286,9 +286,7 @@ static QState dclockSetState(struct DClock *me)
 		if (0 == me->setTimeouts) {
 			post(me, UPDATE_TIME_TIMEOUT_SIGNAL, 0);
 		} else {
-			displayNameDots(me);
-			/* FIXME: make the minutes and seconds states the
-			   same. */
+			displaySettingTime(me);
 			QActive_arm((QActive*)me, TSET_TOUT);
 		}
 		return Q_HANDLED();
@@ -305,6 +303,7 @@ static QState dclockSetState(struct DClock *me)
 			me->dseconds = (me->setHours * 10000L)
 				+ (me->setMinutes * 100L) + me->setSeconds;
 		}
+		lcd_clear();
 		displayTime(me);
 		return Q_HANDLED();
 	}
@@ -314,15 +313,15 @@ static QState dclockSetState(struct DClock *me)
 
 static QState dclockSetHoursState(struct DClock *me)
 {
-	static const char PROGMEM setTimeHoursName[] = "Hours";
+	static const char PROGMEM setTimeHoursName[] = "Set hours:";
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		QActive_arm((QActive*)me, TSET_TOUT);
 		me->setTimeouts = N_TSET_TOUTS;
-		me->setTimeName = setTimeHoursName;
-		displayNameDots(me);
-		lcd_set_cursor(0, 1);
+		displaySettingTime(me);
+		displayMenuName(setTimeHoursName);
+		lcd_set_cursor(1, 1);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
@@ -345,7 +344,7 @@ static QState dclockSetHoursState(struct DClock *me)
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
-		lcd_set_cursor(0, 1);
+		lcd_set_cursor(1, 1);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(dclockSetMinutesState);
@@ -356,15 +355,15 @@ static QState dclockSetHoursState(struct DClock *me)
 
 static QState dclockSetMinutesState(struct DClock *me)
 {
-	static const char PROGMEM setTimeMinutesName[] = "Minutes";
+	static const char PROGMEM setTimeMinutesName[] = "Set minutes:";
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		QActive_arm((QActive*)me, TSET_TOUT);
 		me->setTimeouts = N_TSET_TOUTS;
-		me->setTimeName = setTimeMinutesName;
-		displayNameDots(me);
-		lcd_set_cursor(0, 4);
+		displaySettingTime(me);
+		displayMenuName(setTimeMinutesName);
+		lcd_set_cursor(1, 4);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
@@ -387,7 +386,7 @@ static QState dclockSetMinutesState(struct DClock *me)
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
-		lcd_set_cursor(0, 4);
+		lcd_set_cursor(1, 4);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(dclockSetSecondsState);
@@ -398,15 +397,15 @@ static QState dclockSetMinutesState(struct DClock *me)
 
 static QState dclockSetSecondsState(struct DClock *me)
 {
-	static const char PROGMEM setTimeSecondsName[] = "Seconds";
+	static const char PROGMEM setTimeSecondsName[] = "Set seconds:";
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		QActive_arm((QActive*)me, TSET_TOUT);
 		me->setTimeouts = N_TSET_TOUTS;
-		me->setTimeName = setTimeSecondsName;
-		displayNameDots(me);
-		lcd_set_cursor(0, 7);
+		displaySettingTime(me);
+		displayMenuName(setTimeSecondsName);
+		lcd_set_cursor(1, 7);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
@@ -429,7 +428,7 @@ static QState dclockSetSecondsState(struct DClock *me)
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
-		lcd_set_cursor(0, 7);
+		lcd_set_cursor(1, 7);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(dclockState);
