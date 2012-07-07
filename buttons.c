@@ -1,4 +1,5 @@
 #include "buttons.h"
+#include "serial.h"
 #include "bsp.h"
 #include "dclock.h"
 
@@ -157,6 +158,17 @@ static QState buttonDownState(struct Buttons *me)
 		break;
 
 	case Q_EXIT_SIG:
+		switch (me->whichButton) {
+		case 1:
+			post(&dclock, BUTTON_SELECT_RELEASE_SIGNAL, 0);
+			break;
+		case 2:
+			post(&dclock, BUTTON_UP_RELEASE_SIGNAL, 0);
+			break;
+		case 3:
+			post(&dclock, BUTTON_DOWN_RELEASE_SIGNAL, 0);
+			break;
+		}
 		me->whichButton = 0;
 		me->repeatCount = 0;
 		break;
@@ -200,11 +212,6 @@ static QState buttonLongState(struct Buttons *me)
 				return Q_TRAN(buttonRepeatingState);
 			}
 		}
-		return Q_HANDLED();
-
-	case Q_EXIT_SIG:
-		me->whichButton = 0;
-		me->repeatCount = 0;
 		return Q_HANDLED();
 	}
 	return Q_SUPER(buttonDownState);

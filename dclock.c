@@ -262,8 +262,11 @@ static QState dclockSetState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 	case BUTTON_SELECT_REPEAT_SIGNAL:
+	case BUTTON_SELECT_RELEASE_SIGNAL:
 	case BUTTON_UP_LONG_PRESS_SIGNAL:
+	case BUTTON_UP_RELEASE_SIGNAL:
 	case BUTTON_DOWN_LONG_PRESS_SIGNAL:
+	case BUTTON_DOWN_RELEASE_SIGNAL:
 		/* Make sure we ignore these button signals, as parent states
 		   may do things with them that will interfere with time
 		   setting. */
