@@ -197,12 +197,12 @@ void lcd_clear(void)
 void lcd_setpos(uint8_t line, uint8_t pos)
 {
 	Q_ASSERT( line < 2 );
-	Q_ASSERT( pos < 15 );
+	Q_ASSERT( pos < 16 );
 
 	if (0 == line) {
 		one_char(0, 0x80 | pos);
 	} else {
-		one_char(0, 0x80 | (pos+40));
+		one_char(0, 0x80 | (pos+0x40));
 	}
 }
 
