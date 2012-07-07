@@ -100,7 +100,7 @@ struct DClock dclock;
 
 
 /**
- * Call this just before calling QActive_post() or QActive_postISR().
+ * Call this instead of calling QActive_post().
  *
  * It checks that there is room in the event queue of the receiving state
  * machine.  QP-nano does this check itself anyway, but the assertion from
@@ -108,6 +108,25 @@ struct DClock dclock;
  * know which state machine's queue is full.  If this check is done in user
  * code instead of library code we can tell them apart.
  */
-#define fff(o) Q_ASSERT(((QActive*)(o))->nUsed <= Q_ROM_BYTE(QF_active[((QActive*)(o))->prio].end))
+#define post(o, sig, par)						\
+	do {								\
+		QActive *_me = &((o)->super);				\
+		QActiveCB const Q_ROM *ao = &QF_active[_me->prio];	\
+		Q_ASSERT(_me->nUsed < Q_ROM_BYTE(ao->end));		\
+		QActive_post(_me, sig, (QParam)par);			\
+	} while (0)
+
+/**
+ * Call this instead of calling QActive_postISR().
+ *
+ * @see post()
+ */
+#define postISR(o, sig, par)						\
+	do {								\
+		QActive *_me = &((o)->super);				\
+		QActiveCB const Q_ROM *ao = &QF_active[_me->prio];	\
+		Q_ASSERT(_me->nUsed < Q_ROM_BYTE(ao->end));		\
+		QActive_postISR(_me, sig, (QParam)par);			\
+	} while (0)
 
 #endif

@@ -146,8 +146,7 @@ static QState dclockState(struct DClock *me)
 			BSP_set_decimal_32_counter(0);
 			/* We've counted 32 parts of a decimal second, so tick
 			   over to the next second. */
-			fff(me);
-			QActive_post((QActive*)me, TICK_DECIMAL_SIGNAL, 0);
+			post(me, TICK_DECIMAL_SIGNAL, 0);
 		}
 		return Q_HANDLED();
 
@@ -259,8 +258,7 @@ static QState dclockSetState(struct DClock *me)
 		QActive_arm((QActive*)me, TSET_TOUT);
 		displaySettingTime(me);
 		displayNameDots(me);
-		fff(me);
-		QActive_post((QActive*)me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
+		post(me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 	case BUTTON_SELECT_REPEAT_SIGNAL:
@@ -286,9 +284,7 @@ static QState dclockSetState(struct DClock *me)
 		Q_ASSERT( me->setTimeouts );
 		me->setTimeouts --;
 		if (0 == me->setTimeouts) {
-			fff(me);
-			QActive_post((QActive*)me, UPDATE_TIME_TIMEOUT_SIGNAL,
-				     0);
+			post(me, UPDATE_TIME_TIMEOUT_SIGNAL, 0);
 		} else {
 			displayNameDots(me);
 			/* FIXME: make the minutes and seconds states the
@@ -336,8 +332,7 @@ static QState dclockSetHoursState(struct DClock *me)
 		} else {
 			me->setHours++;
 		}
-		fff(me);
-		QActive_post((QActive*)me, UPDATE_TIME_SET_SIGNAL, 0);
+		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
@@ -347,8 +342,7 @@ static QState dclockSetHoursState(struct DClock *me)
 		} else {
 			me->setHours--;
 		}
-		fff(me);
-		QActive_post((QActive*)me, UPDATE_TIME_SET_SIGNAL, 0);
+		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
 		lcd_set_cursor(0, 1);
@@ -380,8 +374,7 @@ static QState dclockSetMinutesState(struct DClock *me)
 		} else {
 			me->setMinutes++;
 		}
-		fff(me);
-		QActive_post((QActive*)me, UPDATE_TIME_SET_SIGNAL, 0);
+		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
@@ -391,8 +384,7 @@ static QState dclockSetMinutesState(struct DClock *me)
 		} else {
 			me->setMinutes--;
 		}
-		fff(me);
-		QActive_post((QActive*)me, UPDATE_TIME_SET_SIGNAL, 0);
+		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
 		lcd_set_cursor(0, 4);
@@ -424,8 +416,7 @@ static QState dclockSetSecondsState(struct DClock *me)
 		} else {
 			me->setSeconds++;
 		}
-		fff(me);
-		QActive_post((QActive*)me, UPDATE_TIME_SET_SIGNAL, 0);
+		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
@@ -435,8 +426,7 @@ static QState dclockSetSecondsState(struct DClock *me)
 		} else {
 			me->setSeconds--;
 		}
-		fff(me);
-		QActive_post((QActive*)me, UPDATE_TIME_SET_SIGNAL, 0);
+		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
 		lcd_set_cursor(0, 7);

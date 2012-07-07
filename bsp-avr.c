@@ -70,7 +70,7 @@ void BSP_watchdog(struct DClock *me)
 
 SIGNAL(WDT_vect)
 {
-	QActive_postISR((QActive*)(&dclock), WATCHDOG_SIGNAL, 0);
+	postISR(&dclock, WATCHDOG_SIGNAL, 0);
 }
 
 
@@ -162,19 +162,16 @@ SIGNAL(TIMER1_COMPA_vect)
 	static uint8_t watchdog_counter = 0;
 
 	TOGGLE_ON();
-	fff(&dclock);
 	/* Increment the counter before sending the event.  We should never
 	   send a zero.  No real reason, just the way it is. */
 	decimal_32_counter ++;
-	QActive_postISR((QActive*)(&dclock), TICK_DECIMAL_32_SIGNAL,
-			decimal_32_counter);
+	postISR(&dclock, TICK_DECIMAL_32_SIGNAL, decimal_32_counter);
 	/* The buttons don't care where we are in the second, so don't send the
 	   counter with this signal. */
-	QActive_postISR((QActive*)(&buttons), TICK_DECIMAL_32_SIGNAL, 0);
+	postISR(&buttons, TICK_DECIMAL_32_SIGNAL, 0);
 	watchdog_counter ++;
 	if (watchdog_counter >= 7) {
-		fff(&dclock);
-		QActive_postISR((QActive*)(&dclock), WATCHDOG_SIGNAL, 0);
+		postISR(&dclock, WATCHDOG_SIGNAL, 0);
 		watchdog_counter = 0;
 		/* Turn on the Arduino LED.  It gets turned off when
 		   WATCHDOG_SIGNAL is handled. */

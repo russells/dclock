@@ -16,6 +16,9 @@
  */
 
 
+Q_DEFINE_THIS_FILE;
+
+
 /** The number of ticks before we send a button long press event.  Based on
     sampling the buttons at about 37 Hz (32/0.864).*/
 #define LONG_PRESS 30
@@ -64,16 +67,16 @@ static QState buttonsState(struct Buttons *me)
 			    pressed. */
 			/*FALLTHROUGH*/
 		case 0:
-			QActive_post((QActive*)me, BUTTONS_UP_SIGNAL, 0);
+			post(me, BUTTONS_UP_SIGNAL, 0);
 			break;
 		case 1:
-			QActive_post((QActive*)me, BUTTON_1_SIGNAL, 1);
+			post(me, BUTTON_1_SIGNAL, 1);
 			break;
 		case 2:
-			QActive_post((QActive*)me, BUTTON_2_SIGNAL, 2);
+			post(me, BUTTON_2_SIGNAL, 2);
 			break;
 		case 3:
-			QActive_post((QActive*)me, BUTTON_3_SIGNAL, 3);
+			post(me, BUTTON_3_SIGNAL, 3);
 			break;
 		}
 		break;
@@ -122,16 +125,13 @@ static QState buttonDownState(struct Buttons *me)
 	case Q_ENTRY_SIG:
 		switch (me->whichButton) {
 		case 1:
-			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_SELECT_PRESS_SIGNAL, 0);
+			post(&dclock, BUTTON_SELECT_PRESS_SIGNAL, 0);
 			break;
 		case 2:
-			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_UP_PRESS_SIGNAL, 0);
+			post(&dclock, BUTTON_UP_PRESS_SIGNAL, 0);
 			break;
 		case 3:
-			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_DOWN_PRESS_SIGNAL, 0);
+			post(&dclock, BUTTON_DOWN_PRESS_SIGNAL, 0);
 			break;
 		}
 
@@ -173,16 +173,13 @@ static QState buttonLongState(struct Buttons *me)
 	case Q_ENTRY_SIG:
 		switch (me->whichButton) {
 		case 1:
-			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_SELECT_LONG_PRESS_SIGNAL, 0);
+			post(&dclock, BUTTON_SELECT_LONG_PRESS_SIGNAL, 0);
 			break;
 		case 2:
-			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_UP_LONG_PRESS_SIGNAL, 0);
+			post(&dclock, BUTTON_UP_LONG_PRESS_SIGNAL, 0);
 			break;
 		case 3:
-			QActive_post(((QActive*)(&dclock)),
-				     BUTTON_DOWN_LONG_PRESS_SIGNAL, 0);
+			post(&dclock, BUTTON_DOWN_LONG_PRESS_SIGNAL, 0);
 			break;
 		}
 		me->repeatCount = 0;
@@ -240,16 +237,13 @@ static QState buttonRepeatingState(struct Buttons *me)
 		if (me->repeatCount >= REPEAT_PERIOD) {
 			switch (me->whichButton) {
 			case 1:
-				QActive_post(((QActive*)(&dclock)),
-					     BUTTON_SELECT_REPEAT_SIGNAL, 0);
+				post(&dclock, BUTTON_SELECT_REPEAT_SIGNAL, 0);
 				break;
 			case 2:
-				QActive_post(((QActive*)(&dclock)),
-					     BUTTON_UP_REPEAT_SIGNAL, 0);
+				post(&dclock, BUTTON_UP_REPEAT_SIGNAL, 0);
 				break;
 			case 3:
-				QActive_post(((QActive*)(&dclock)),
-					     BUTTON_DOWN_REPEAT_SIGNAL, 0);
+				post(&dclock, BUTTON_DOWN_REPEAT_SIGNAL, 0);
 				break;
 			}
 			me->repeatCount = 0;
