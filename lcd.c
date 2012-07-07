@@ -379,3 +379,9 @@ void lcd_dec_brightness(void)
 		break;
 	}
 }
+
+
+uint8_t lcd_get_brightness(void)
+{
+	return brightness;
+}

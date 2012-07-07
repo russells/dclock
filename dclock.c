@@ -21,6 +21,7 @@ Q_DEFINE_THIS_FILE;
 
 static QState dclockInitial          (struct DClock *me);
 static QState dclockState            (struct DClock *me);
+static QState dclockTempBrightnessState(struct DClock *me);
 static QState dclockSetState         (struct DClock *me);
 static QState dclockSetHoursState    (struct DClock *me);
 static QState dclockSetMinutesState  (struct DClock *me);
@@ -157,7 +158,11 @@ static QState dclockState(struct DClock *me)
 	}
 
 	case BUTTON_SELECT_PRESS_SIGNAL:
-		return Q_TRAN(dclockSetHoursState);
+		if (lcd_get_brightness()) {
+			return Q_TRAN(dclockSetHoursState);
+		} else {
+			return Q_TRAN(dclockTempBrightnessState);
+		}
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
 		lcd_inc_brightness();
@@ -168,6 +173,40 @@ static QState dclockState(struct DClock *me)
 		return Q_HANDLED();
 	}
 	return Q_SUPER(&QHsm_top);
+}
+
+
+static QState dclockTempBrightnessState(struct DClock *me)
+{
+	static uint8_t counter;
+
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		lcd_inc_brightness();
+		counter = 0;
+		return Q_HANDLED();
+	case BUTTON_SELECT_RELEASE_SIGNAL:
+		return Q_TRAN(dclockState);
+	case BUTTON_SELECT_REPEAT_SIGNAL:
+		switch (counter) {
+		case 0:
+		case 32:
+		case 64:
+			lcd_inc_brightness();
+		default:
+			counter ++;
+			break;
+		case 65:
+			break;
+		}
+		return Q_HANDLED();
+	case Q_EXIT_SIG:
+		while (lcd_get_brightness()) {
+			lcd_dec_brightness();
+		}
+		return Q_HANDLED();
+	}
+	return Q_SUPER(dclockState);
 }
 
 
