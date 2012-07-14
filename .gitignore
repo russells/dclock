@@ -8,9 +8,6 @@ dclock.elf
 dclock.hex
 dclock.map
 
-# QP stuff
-qp-nano
-
 # Utility program(s).
 decimal-time-conversion
 
