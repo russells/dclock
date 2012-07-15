@@ -169,6 +169,10 @@ typedef struct QActiveTag {
     */
     uint8_t nUsed;
 
+    /** \brief signal to send when timer expires
+     */
+    QSignal timerSig;
+
 } QActive;
 
 
@@ -269,7 +273,23 @@ typedef struct QActiveTag {
     * a state machine of an active object:
     * \include qfn_arm.c
     */
-    #define QActive_arm(me_, tout_) ((me_)->tickCtr = (QTimeEvtCtr)(tout_))
+    #define QActive_arm(me_, tout_) QActive_arm_sig(me_,tout_,Q_TIMEOUT_SIG)
+
+    /** \brief Arm the QP-nano one-shot time event with an arbitrary signal.
+     * \see QActive_arm()
+     * If \param sig_ is non-zero, use that signal, otherwise leave the signal
+     * unchanged.
+     */
+    #define QActive_arm_sig(me_, tout_, sig_)               \
+        do {                                                \
+            QF_INT_LOCK();                                  \
+            (me_)->tickCtr = (QTimeEvtCtr)(tout_);          \
+            if (sig) {                                      \
+                (me_)->timerSig = (QSignal)(sig_);          \
+            }                                               \
+            QF_INT_UNLOCK();                                \
+        } while (0)
+
 
     /** \brief Disarm a time event. Since the tick counter
     * is a single byte in this case, the time event can be atomically
@@ -306,6 +326,13 @@ typedef struct QActiveTag {
     * \include qfn_arm.c
     */
     void QActive_arm(QActive *me, QTimeEvtCtr tout);
+
+    /** \brief Arm the QP-nano one-shot time event with an arbitrary signal.
+     * \see QActive_arm()
+     * If \param sig_ is non-zero, use that signal, otherwise leave the signal
+     * unchanged.
+     */
+    void QActive_arm_sig(QActive *me, QTimeEvtCtr tout, QSignal sig);
 
     /** \brief Disarm a time event. Since the tick counter
     * is a multi-byte variable in this case, the operation must be

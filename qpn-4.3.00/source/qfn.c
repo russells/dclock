@@ -139,9 +139,9 @@ void QF_tickISR(void) {
 #if (Q_PARAM_SIZE != 0)
     QActiveCB const Q_ROM *ao = &QF_active[a->prio];
     Q_ASSERT(a->nUsed < Q_ROM_BYTE(ao->end));
-                QActive_postISR(a, (QSignal)Q_TIMEOUT_SIG, (QParam)0);
+                QActive_postISR(a, a->timerSig, (QParam)0);
 #else
-                QActive_postISR(a, (QSignal)Q_TIMEOUT_SIG);
+                QActive_postISR(a, a->timerSig);
 #endif
             }
         }
@@ -155,6 +155,16 @@ void QF_tickISR(void) {
 void QActive_arm(QActive *me, QTimeEvtCtr tout) {
     QF_INT_LOCK();
     me->tickCtr = tout;
+    me->timerSig = Q_TIMEOUT_SIG;
+    QF_INT_UNLOCK();
+}
+/*..........................................................................*/
+void QActive_arm_sig(QActive *me, QTimeEvtCtr tout, QSignal sig) {
+    QF_INT_LOCK();
+    me->tickCtr = tout;
+    if (sig) {
+        me->timerSig = sig;
+    }
     QF_INT_UNLOCK();
 }
 /*..........................................................................*/

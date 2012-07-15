@@ -299,7 +299,9 @@ static QState dclockSetState(struct DClock *me)
 		   and dots. */
 		me->timeSetChanged = 73; /* Need a true value?  Why not 73? */
 		me->setTimeouts = N_TSET_TOUTS;
-		QActive_arm((QActive*)me, TSET_TOUT);
+		/* We don't change the signal that QP sends us on timeout,
+		   since the signal is specific to the child set state. */
+		QActive_arm_sig((QActive*)me, TSET_TOUT, 0);
 		displaySettingTime(me);
 		post(me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		return Q_HANDLED();
@@ -316,25 +318,15 @@ static QState dclockSetState(struct DClock *me)
 		return Q_HANDLED();
 	case UPDATE_TIME_TIMEOUT_SIGNAL:
 		/* Any of our child states can time out.  When they do, we get
-		   this signal to tell us that, and we abort the time
-		   setting. */
+		   this signal to tell us that, and we abort the time setting.
+		   The child states use their own signals to do the timeout in
+		   order to avoid a race condition between them with
+		   Q_TIMEOUT_SIG, which is why we don't handle Q_TIMEOUT_SIG
+		   here (except to assert that it shouldn't happen.) */
 		me->timeSetChanged = 0;
 		return Q_TRAN(dclockState);
 	case Q_TIMEOUT_SIG:
-		/* The three child states that set the hours, minutes, and
-		   seconds, all arm the timer and set the number of timeouts.
-		   At each Q_TIMEOUT_SIG we display a decreasing number of dots
-		   (by decrementing setTimeouts and using that to count dots.
-		   When that gets to zero, we give up, by sending ourselves the
-		   signal that indicates that. */
-		Q_ASSERT( me->setTimeouts );
-		me->setTimeouts --;
-		if (0 == me->setTimeouts) {
-			post(me, UPDATE_TIME_TIMEOUT_SIGNAL, 0);
-		} else {
-			displaySettingTime(me);
-			QActive_arm((QActive*)me, TSET_TOUT);
-		}
+		Q_ASSERT( 0 );
 		return Q_HANDLED();
 	case Q_EXIT_SIG:
 		QActive_disarm((QActive*)me);
@@ -363,11 +355,23 @@ static QState dclockSetHoursState(struct DClock *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		QActive_arm((QActive*)me, TSET_TOUT);
+		QActive_arm_sig((QActive*)me, TSET_TOUT,
+				UPDATE_HOURS_TIMEOUT_SIGNAL);
 		me->setTimeouts = N_TSET_TOUTS;
 		displaySettingTime(me);
 		displayMenuName(setTimeHoursName);
 		lcd_set_cursor(1, 1);
+		return Q_HANDLED();
+	case UPDATE_HOURS_TIMEOUT_SIGNAL:
+		Q_ASSERT( me->setTimeouts );
+		me->setTimeouts --;
+		if (0 == me->setTimeouts) {
+			post(me, UPDATE_TIME_TIMEOUT_SIGNAL, 0);
+		} else {
+			displaySettingTime(me);
+			QActive_arm_sig((QActive*)me, TSET_TOUT,
+					UPDATE_HOURS_TIMEOUT_SIGNAL);
+		}
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
@@ -405,11 +409,23 @@ static QState dclockSetMinutesState(struct DClock *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		QActive_arm((QActive*)me, TSET_TOUT);
+		QActive_arm_sig((QActive*)me, TSET_TOUT,
+				UPDATE_MINUTES_TIMEOUT_SIGNAL);
 		me->setTimeouts = N_TSET_TOUTS;
 		displaySettingTime(me);
 		displayMenuName(setTimeMinutesName);
 		lcd_set_cursor(1, 4);
+		return Q_HANDLED();
+	case UPDATE_MINUTES_TIMEOUT_SIGNAL:
+		Q_ASSERT( me->setTimeouts );
+		me->setTimeouts --;
+		if (0 == me->setTimeouts) {
+			post(me, UPDATE_TIME_TIMEOUT_SIGNAL, 0);
+		} else {
+			displaySettingTime(me);
+			QActive_arm_sig((QActive*)me, TSET_TOUT,
+					UPDATE_MINUTES_TIMEOUT_SIGNAL);
+		}
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
@@ -447,11 +463,23 @@ static QState dclockSetSecondsState(struct DClock *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		QActive_arm((QActive*)me, TSET_TOUT);
+		QActive_arm_sig((QActive*)me, TSET_TOUT,
+				UPDATE_SECONDS_TIMEOUT_SIGNAL);
 		me->setTimeouts = N_TSET_TOUTS;
 		displaySettingTime(me);
 		displayMenuName(setTimeSecondsName);
 		lcd_set_cursor(1, 7);
+		return Q_HANDLED();
+	case UPDATE_SECONDS_TIMEOUT_SIGNAL:
+		Q_ASSERT( me->setTimeouts );
+		me->setTimeouts --;
+		if (0 == me->setTimeouts) {
+			post(me, UPDATE_TIME_TIMEOUT_SIGNAL, 0);
+		} else {
+			displaySettingTime(me);
+			QActive_arm_sig((QActive*)me, TSET_TOUT,
+					UPDATE_SECONDS_TIMEOUT_SIGNAL);
+		}
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
