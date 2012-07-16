@@ -365,6 +365,18 @@ void lcd_dec_brightness(void)
 }
 
 
+static void lcd_on(void)
+{
+	one_char(0, 0b00001100); /* Display on, Cursor off, Blink off */
+}
+
+
+static void lcd_off(void)
+{
+	one_char(0, 0b00001000); /* Display off, Cursor off, Blink off */
+}
+
+
 void lcd_set_brightness(uint8_t b)
 {
 	Q_ASSERT( b < 5 );
@@ -373,6 +385,7 @@ void lcd_set_brightness(uint8_t b)
 	case 0:
 		BSP_lcd_pwm(BRIGHTNESS_0);
 		BSP_lcd_pwm_off();
+		lcd_off();
 		break;
 	case 1:
 		BSP_lcd_pwm(BRIGHTNESS_1);
@@ -390,6 +403,12 @@ void lcd_set_brightness(uint8_t b)
 		BSP_lcd_pwm(BRIGHTNESS_4);
 		BSP_lcd_pwm_on();
 		break;
+	}
+	/* If the LCD was off previously (brightness==0) and we're turning it
+	   on now, make sure to turn on the LCD itself, rather than just the
+	   backlight. */
+	if (0 == brightness && 0 != b) {
+		lcd_on();
 	}
 	brightness = b;
 }
