@@ -81,12 +81,12 @@ static QState buttonsState(struct Buttons *me)
 			post(me, BUTTON_3_SIGNAL, 3);
 			break;
 		}
-		break;
+		return Q_HANDLED();
 
 	case BUTTONS_UP_SIGNAL:
 		me->whichButton = 0;
 		me->repeatCount = 0;
-		break;
+		return Q_HANDLED();
 
 	case BUTTON_1_SIGNAL:
 	case BUTTON_2_SIGNAL:
@@ -94,7 +94,6 @@ static QState buttonsState(struct Buttons *me)
 		button = (uint8_t)(Q_PAR(me));
 		if (0 == me->whichButton) {
 			me->whichButton = button;
-			return Q_HANDLED();
 		}
 		if (button == me->whichButton) {
 			/* The same button is still pressed, we're counting
@@ -102,8 +101,6 @@ static QState buttonsState(struct Buttons *me)
 			me->repeatCount++;
 			if (me->repeatCount >= 3) {
 				return Q_TRAN(buttonDownState);
-			} else {
-				return Q_HANDLED();
 			}
 		}
 		else {
@@ -111,9 +108,8 @@ static QState buttonsState(struct Buttons *me)
 			   were counting ticks.  Beached az! */
 			me->repeatCount = 1;
 			me->whichButton = button;
-			return Q_HANDLED();
 		}
-		break;
+		return Q_HANDLED();
 	}
 	return Q_SUPER(&QHsm_top);
 }
@@ -136,6 +132,7 @@ static QState buttonDownState(struct Buttons *me)
 			post(&alarm, BUTTON_DOWN_PRESS_SIGNAL, 0);
 			break;
 		}
+		return Q_HANDLED();
 
 	case BUTTONS_UP_SIGNAL:
 		return Q_TRAN(buttonsState);
@@ -153,10 +150,8 @@ static QState buttonDownState(struct Buttons *me)
 		me->repeatCount++;
 		if (me->repeatCount == LONG_PRESS) {
 			return Q_TRAN(buttonLongState);
-		} else {
-			return Q_HANDLED();
 		}
-		break;
+		return Q_HANDLED();
 
 	case Q_EXIT_SIG:
 		switch (me->whichButton) {
@@ -172,7 +167,7 @@ static QState buttonDownState(struct Buttons *me)
 		}
 		me->whichButton = 0;
 		me->repeatCount = 0;
-		break;
+		return Q_HANDLED();
 	}
 	return Q_SUPER(buttonsState);
 }
@@ -228,7 +223,7 @@ static QState buttonRepeatingState(struct Buttons *me)
 
 	case Q_ENTRY_SIG:
 		me->repeatCount = 0;
-		break;
+		return Q_HANDLED();
 
 	case BUTTONS_UP_SIGNAL:
 		return Q_TRAN(buttonsState);
