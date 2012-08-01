@@ -52,6 +52,7 @@ int main(int argc, char **argv)
 	BSP_startmain();
 	serial_init();
 	serial_send_rom(startup_message);
+	serial_drain();
 	lcd_init();
 	dclock_ctor();
 	buttons_ctor();

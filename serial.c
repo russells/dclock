@@ -331,3 +331,10 @@ int serial_send_hex_int(unsigned int x)
 	return serial_send(bufp);
 }
 
+
+void serial_drain(void)
+{
+	while (sendhead != sendtail)
+		;
+}
+
