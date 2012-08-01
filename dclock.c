@@ -64,6 +64,17 @@ int main(int argc, char **argv)
 	goto startmain;
 }
 
+
+void QF_onStartup(void)
+{
+	Q_ASSERT(buttons.ready);
+	Q_ASSERT(dclock.ready);
+	Q_ASSERT(alarm.ready);
+
+	BSP_QF_onStartup();
+}
+
+
 void dclock_ctor(void)
 {
 	QActive_ctor((QActive *)(&dclock), (QStateHandler)&dclockInitial);

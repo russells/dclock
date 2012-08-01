@@ -37,6 +37,8 @@ void BSP_startmain();		/* Code to put right at the start of main() */
 
 void BSP_init(void);
 
+void BSP_QF_onStartup(void);
+
 uint8_t BSP_getButton(void);
 
 void BSP_lcd_init(uint8_t pwm);

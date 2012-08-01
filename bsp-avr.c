@@ -17,7 +17,7 @@ static void timer1_init(void);
 static void buttons_init(void);
 
 
-void QF_onStartup(void)
+void BSP_QF_onStartup(void)
 {
 	/* We setup the periodic interrupt after QF has started, so we don't
 	   try to push events when the event handling stuff is not ready.
