@@ -97,6 +97,8 @@ struct DClock {
 	uint8_t setSeconds;
 	/** Count timeouts in the time setting states. */
 	uint8_t setTimeouts;
+	/** Set true when we are able to receive signals. */
+	uint8_t ready;
 };
 
 
@@ -131,6 +133,27 @@ struct DClock dclock;
 		QActiveCB const Q_ROM *ao = &QF_active[_me->prio];	\
 		Q_ASSERT(_me->nUsed < Q_ROM_BYTE(ao->end));		\
 		QActive_postISR(_me, sig, (QParam)par);			\
+	} while (0)
+
+/**
+ * Some of our objects have a ready member, that they set when they are able to
+ * receive events.  For those objects, call this function to post an event.
+ *
+ * @see post()
+ */
+#define post_r(o, sig, par)			\
+	do {					\
+		if (o->ready)			\
+			post(o, sig, par);	\
+	} while (0)
+
+/**
+ * @see post_r()
+ */
+#define postISR_r(o, sig, par)			\
+	do {					\
+		if (o->ready)			\
+			postISR(o, sig, par);	\
 	} while (0)
 
 #endif

@@ -70,6 +70,7 @@ void dclock_ctor(void)
 	/* Using this value as the initial time allows us to test the code that
 	   moves the time across the display each minute. */
 	dclock.dseconds = 11745;
+	dclock.ready = 0;
 }
 
 
@@ -134,6 +135,7 @@ static QState dclockState(struct DClock *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
+		me->ready = 73;	/* (V)(;,,,;)(V) */
 		lcd_clear();
 		return Q_HANDLED();
 	case WATCHDOG_SIGNAL:
@@ -159,7 +161,7 @@ static QState dclockState(struct DClock *me)
 	case TICK_DECIMAL_SIGNAL:
 		inc_dseconds(me);
 		displayTime(me);
-		post(&alarm, TICK_DECIMAL_SIGNAL, me->dseconds);
+		post_r((&alarm), TICK_DECIMAL_SIGNAL, me->dseconds);
 		return Q_HANDLED();
 
 	case BUTTON_SELECT_PRESS_SIGNAL:

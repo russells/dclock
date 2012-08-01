@@ -23,6 +23,10 @@ struct Buttons {
 	 * be set to 0 each time a new button is pressed.
 	 */
 	uint8_t repeatCount;
+	/**
+	 * Set true when we are able to receive signals.
+	 */
+	uint8_t ready;
 };
 
 

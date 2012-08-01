@@ -13,6 +13,8 @@ struct Alarm {
 	uint8_t onBrightness;
 	/** The duller brightness when we flash the display. */
 	uint8_t offBrightness;
+	/** Set true when we are able to receive signals. */
+	uint8_t ready;
 };
 
 extern struct Alarm alarm;

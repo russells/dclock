@@ -20,6 +20,7 @@ void alarm_ctor(void)
 {
 	QActive_ctor((QActive*)(&alarm), (QStateHandler)initialState);
 	alarm.alarmTime = 11749;
+	alarm.ready = 0;
 }
 
 
@@ -34,6 +35,9 @@ static QState topState(struct Alarm *me)
 	uint32_t thetime;
 
 	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		me->ready = 73;
+		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:
 		thetime = Q_PAR(me);
 		if (thetime == me->alarmTime) {

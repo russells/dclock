@@ -48,6 +48,7 @@ buttons_ctor(void)
 	QActive_ctor((QActive *)(&buttons), (QStateHandler)&buttonsInitial);
 	buttons.whichButton = 0;
 	buttons.repeatCount = 0;
+	buttons.ready = 0;
 }
 
 
@@ -62,6 +63,9 @@ static QState buttonsState(struct Buttons *me)
 	uint8_t button;
 
 	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		me->ready = 73;
+		return Q_HANDLED();
 	case TICK_DECIMAL_32_SIGNAL:
 		button = BSP_getButton();
 		switch (button) {

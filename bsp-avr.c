@@ -70,6 +70,9 @@ void BSP_watchdog(struct DClock *me)
 
 SIGNAL(WDT_vect)
 {
+	/* There's no point calling postISR_r() instead of postISR() here.  If
+	   we don't send this signal we're hosed by the next WDT timeout
+	   anyway. */
 	postISR(&dclock, WATCHDOG_SIGNAL, 0);
 }
 
@@ -165,13 +168,13 @@ SIGNAL(TIMER1_COMPA_vect)
 	/* Increment the counter before sending the event.  We should never
 	   send a zero.  No real reason, just the way it is. */
 	decimal_32_counter ++;
-	postISR(&dclock, TICK_DECIMAL_32_SIGNAL, decimal_32_counter);
+	postISR_r((&dclock), TICK_DECIMAL_32_SIGNAL, decimal_32_counter);
 	/* The buttons don't care where we are in the second, so don't send the
 	   counter with this signal. */
-	postISR(&buttons, TICK_DECIMAL_32_SIGNAL, 0);
+	postISR_r((&buttons), TICK_DECIMAL_32_SIGNAL, 0);
 	watchdog_counter ++;
 	if (watchdog_counter >= 7) {
-		postISR(&dclock, WATCHDOG_SIGNAL, 0);
+		postISR_r((&dclock), WATCHDOG_SIGNAL, 0);
 		watchdog_counter = 0;
 		/* Turn on the Arduino LED.  It gets turned off when
 		   WATCHDOG_SIGNAL is handled. */
