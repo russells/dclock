@@ -117,7 +117,7 @@ clean:
 
 .PHONY: flash
 flash: $(HEXPROGRAM)
-	avrdude -q -p m328p -B 20 \
+	avrdude -p m328p -B 20 \
 		-P $(AVR_PROGRAMMER_PORT) -c $(AVR_PROGRAMMER) \
 		-U lfuse:w:$(LFUSE):m \
 		-U hfuse:w:$(HFUSE):m \
