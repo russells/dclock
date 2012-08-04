@@ -53,21 +53,26 @@ int main(int argc, char **argv)
 	mcusr = MCUSR;
 	MCUSR = 0;
 	TOGGLE_BEGIN();
-	BSP_startmain();
+	BSP_startmain();	/* Disables the watchdog timer. */
 	serial_init();
 	serial_send_rom(startup_message);
+	serial_drain();
 	SERIALSTR("*** Reset reason:");
 	if (mcusr & (1 << WDRF)) SERIALSTR(" WD");
 	if (mcusr & (1 << BORF)) SERIALSTR(" BO");
 	if (mcusr & (1 << EXTRF)) SERIALSTR(" EXT");
 	if (mcusr & (1 << PORF)) SERIALSTR(" PO");
 	SERIALSTR("\r\n");
-	serial_drain();
 	lcd_init();
 	dclock_ctor();
 	buttons_ctor();
 	alarm_ctor();
-	BSP_init(); /* initialize the Board Support Package */
+
+	/* Drain the serial output just before the watchdog timer is
+	   reenabled. */
+	serial_drain();
+	/* Initialize the BSP.  Enables the watchdog timer. */
+	BSP_init();
 
 	QF_run();
 

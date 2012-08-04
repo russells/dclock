@@ -79,7 +79,7 @@ SIGNAL(WDT_vect)
 
 void BSP_startmain(void)
 {
-
+	wdt_disable();
 }
 
 
