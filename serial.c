@@ -22,7 +22,7 @@ Q_DEFINE_THIS_FILE;
  * @note The number of bytes that can actually be queued is one less than this
  * value, due to the way that the ring buffer works.
  */
-#define SEND_BUFFER_SIZE 120
+#define SEND_BUFFER_SIZE 250
 
 static char sendbuffer[SEND_BUFFER_SIZE];
 static volatile uint8_t sendhead = 0;
@@ -84,7 +84,10 @@ serial_init(void)
 int serial_send(const char *s)
 {
 	int sent = 0;
+	uint8_t sreg;
 
+	sreg = SREG;
+	cli();
 	while (*s) {
 		if (serial_send_char(*s++)) {
 			sent++;
@@ -92,6 +95,7 @@ int serial_send(const char *s)
 			break;
 		}
 	}
+	SREG = sreg;
 	return sent;
 }
 
@@ -108,7 +112,10 @@ int serial_send_rom(char const Q_ROM * const Q_ROM_VAR s)
 	char c;
 	int i = 0;
 	int sent = 0;
+	uint8_t sreg;
 
+	sreg = SREG;
+	cli();
 	while (1) {
 		c = Q_ROM_BYTE(s[i++]);
 		if (!c) {
@@ -120,6 +127,7 @@ int serial_send_rom(char const Q_ROM * const Q_ROM_VAR s)
 			break;
 		}
 	}
+	SREG = sreg;
 	return sent;
 }
 
@@ -177,7 +185,9 @@ int serial_send_char(char c)
 {
 	int available;
 	int sent;
+	uint8_t sreg;
 
+	sreg = SREG;
 	cli();
 	available = sendbuffer_space();
 	if (available >= 1) {
@@ -191,7 +201,7 @@ int serial_send_char(char c)
 	} else {
 		sent = 0;
 	}
-	sei();
+	SREG = sreg;
 	return sent;
 }
 
@@ -240,6 +250,16 @@ void serial_assert_nostop(char const Q_ROM * const Q_ROM_VAR file, int line)
 	wdt_disable();
 
 	/* Rashly assume that the UART is configured. */
+
+	/* Drain the existing data out of the buffer. */
+	while (sendhead != sendtail) {
+		UDR0 = sendbuffer[sendtail];
+		sendtail++;
+		if (sendtail >= SEND_BUFFER_SIZE)
+			sendtail = 0;
+		while ( !( UCSR0A & (1<<UDRE0)) );
+	}
+
 	serial_send_noint('\r');
 	serial_send_noint('\n');
 	serial_send_noint('A');
@@ -292,7 +312,11 @@ int serial_send_int(unsigned int n)
 {
 	char buf[10];
 	char *bufp;
+	uint8_t sreg;
+	int sent;
 
+	sreg = SREG;
+	cli();
 	bufp = buf + 9;
 	*bufp = '\0';
 	if (0 == n) {
@@ -306,7 +330,9 @@ int serial_send_int(unsigned int n)
 			n /= 10;
 		}
 	}
-	return serial_send(bufp);
+	sent = serial_send(bufp);
+	SREG = sreg;
+	return sent;
 }
 
 
@@ -314,9 +340,13 @@ int serial_send_hex_int(unsigned int x)
 {
 	char buf[10];
 	char *bufp;
+	uint8_t sreg;
+	int sent;
 
 	static const PROGMEM char hexchars[] = "0123456789ABCDEF";
 
+	sreg = SREG;
+	cli();
 	bufp = buf + 9;
 	*bufp = '\0';
 	if (0 == x) {
@@ -331,7 +361,9 @@ int serial_send_hex_int(unsigned int x)
 			x >>= 4;
 		}
 	}
-	return serial_send(bufp);
+	sent = serial_send(bufp);
+	SREG = sreg;
+	return sent;
 }
 
 
