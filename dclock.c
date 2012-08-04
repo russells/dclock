@@ -47,11 +47,21 @@ Q_ASSERT_COMPILE(QF_MAX_ACTIVE == Q_DIM(QF_active) - 1);
 
 int main(int argc, char **argv)
 {
+	uint8_t mcusr;
+
  startmain:
+	mcusr = MCUSR;
+	MCUSR = 0;
 	TOGGLE_BEGIN();
 	BSP_startmain();
 	serial_init();
 	serial_send_rom(startup_message);
+	SERIALSTR("*** Reset reason:");
+	if (mcusr & (1 << WDRF)) SERIALSTR(" WD");
+	if (mcusr & (1 << BORF)) SERIALSTR(" BO");
+	if (mcusr & (1 << EXTRF)) SERIALSTR(" EXT");
+	if (mcusr & (1 << PORF)) SERIALSTR(" PO");
+	SERIALSTR("\r\n");
 	serial_drain();
 	lcd_init();
 	dclock_ctor();
