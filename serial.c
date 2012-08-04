@@ -34,10 +34,13 @@ serial_init(void)
 {
 	cli();
 
-	/* Set the baud rate.  Arduino clock = 16MHz, baud = 9600.
+	/* Set the baud rate.  Arduino clock = 16MHz, baud = 115200.
 	   doc8161.pdf, p179 and p203. */
 	UBRR0H = 0;
-	UBRR0L = 103;
+	UBRR0L = 16;
+
+	UCSR0A =(1 << U2X0) |
+		(0 << MPCM0);
 
 	UCSR0B =(1<<RXCIE0) |
 		(0<<TXCIE0) |
