@@ -18,7 +18,9 @@ static QState alarmedOffState(struct Alarm *me);
 
 void alarm_ctor(void)
 {
-	QActive_ctor((QActive*)(&alarm), (QStateHandler)initialState);
+	SERIALSTR("alarm_ctor()\r\n");
+	serial_drain();
+	QActive_ctor((QActive*)(&alarm), (QStateHandler)&initialState);
 	alarm.alarmTime = 11749;
 	alarm.ready = 0;
 }
@@ -26,6 +28,8 @@ void alarm_ctor(void)
 
 static QState initialState(struct Alarm *me)
 {
+	SERIALSTR("alarm initialState()\r\n");
+	serial_drain();
 	return Q_TRAN(topState);
 }
 
@@ -36,6 +40,8 @@ static QState topState(struct Alarm *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
+		SERIALSTR("alarm topState Q_ENTRY\r\n");
+		serial_drain();
 		me->ready = 73;
 		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:

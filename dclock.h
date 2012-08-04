@@ -2,6 +2,7 @@
 #define dclock_h_INCLUDED
 
 #include "qpn_port.h"
+#include "twi.h"
 
 /* Testing - stop the app and busy loop. */
 #define FOREVER for(;;)
@@ -68,6 +69,13 @@ enum DClockSignals {
 	UPDATE_HOURS_TIMEOUT_SIGNAL,
 	UPDATE_MINUTES_TIMEOUT_SIGNAL,
 	UPDATE_SECONDS_TIMEOUT_SIGNAL,
+
+	TWI_REQUEST_SIGNAL,
+	TWI_REPLY_SIGNAL,
+	TWI_FINISHED_SIGNAL,
+	TWI_REPLY_0_SIGNAL,
+	TWI_REPLY_1_SIGNAL,
+
 	MAX_PUB_SIG,
 	MAX_SIG,
 };
@@ -83,6 +91,18 @@ void dclock_ctor(void);
 struct DClock {
 	QActive super;
 	uint32_t dseconds;
+	/** Holder for our TWI request. */
+	struct TWIRequest twiRequest0;
+	uint8_t twiBuffer0[12];
+	/** Holder for our TWI request. */
+	struct TWIRequest twiRequest1;
+	uint8_t twiBuffer1[12];
+	/** This contains the addresses of one or both of the TWIRequests
+	    above.  When we do consecutive TWI operations (which means keeping
+	    control of the bus between the operations and only receiving a
+	    result after both have finished) we fill in both pointers.  For a
+	    single operation, only fill in the first pointer. */
+        struct TWIRequest *twiRequestAddresses[2];
 	/** Set false when we enter the time setting states, true when we
 	    change the time in the time setting states.  Used to decide whether
 	    or not to set the current time after we've finished in the time
@@ -116,7 +136,7 @@ struct DClock dclock;
  */
 #define post(o, sig, par)						\
 	do {								\
-		QActive *_me = &((o)->super);				\
+		QActive *_me = (QActive *)(o);				\
 		QActiveCB const Q_ROM *ao = &QF_active[_me->prio];	\
 		Q_ASSERT(_me->nUsed < Q_ROM_BYTE(ao->end));		\
 		QActive_post(_me, sig, (QParam)par);			\
@@ -129,7 +149,7 @@ struct DClock dclock;
  */
 #define postISR(o, sig, par)						\
 	do {								\
-		QActive *_me = &((o)->super);				\
+		QActive *_me = (QActive *)(o);				\
 		QActiveCB const Q_ROM *ao = &QF_active[_me->prio];	\
 		Q_ASSERT(_me->nUsed < Q_ROM_BYTE(ao->end));		\
 		QActive_postISR(_me, sig, (QParam)par);			\

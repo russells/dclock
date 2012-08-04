@@ -10,6 +10,9 @@
 #include "version.h"
 #include "bsp.h"
 #include "toggle-pin.h"
+#include "twi.h"
+#include "twi-status.h"
+#include "rtc.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -29,12 +32,18 @@ static QState dclockSetMinutesState  (struct DClock *me);
 static QState dclockSetSecondsState  (struct DClock *me);
 
 
+static QEvent twiQueue[4];
 static QEvent dclockQueue[4];
 static QEvent buttonsQueue[4];
 static QEvent alarmQueue[4];
 
+/* The order of these objects is important, firstly because it determines
+   priority, but also because it determines the order in which they are
+   initialised.  For instance, dclock sends a signal to twi when dclock starts,
+   so twi much be initialised first by placing it earlier in this list. */
 QActiveCB const Q_ROM Q_ROM_VAR QF_active[] = {
 	{ (QActive *)0              , (QEvent *)0      , 0                        },
+	{ (QActive *)(&twi)         , twiQueue         , Q_DIM(twiQueue)          },
 	{ (QActive *)(&buttons)     , buttonsQueue     , Q_DIM(buttonsQueue)      },
 	{ (QActive *)(&dclock)      , dclockQueue      , Q_DIM(dclockQueue)       },
 	{ (QActive *)(&alarm)       , alarmQueue       , Q_DIM(alarmQueue)        },
@@ -63,6 +72,7 @@ int main(int argc, char **argv)
 	if (mcusr & (1 << EXTRF)) SERIALSTR(" EXT");
 	if (mcusr & (1 << PORF)) SERIALSTR(" PO");
 	SERIALSTR("\r\n");
+	twi_ctor();
 	lcd_init();
 	dclock_ctor();
 	buttons_ctor();
@@ -80,11 +90,34 @@ int main(int argc, char **argv)
 }
 
 
+static uint32_t
+rtc_time_to_decimal_time(const uint8_t *bytes)
+{
+	uint8_t seconds;
+	uint8_t minutes;
+	uint8_t hours;
+	uint32_t dtime;
+
+	seconds = (bytes[0] & 0x0f) + (10 * ((bytes[0] & 0xf0) >> 4));
+	minutes = (bytes[1] & 0x0f) + (10 * ((bytes[1] & 0xf0) >> 4));
+	hours   = (bytes[2] & 0x0f) + (10 * ((bytes[2] & 0xf0) >> 4));
+
+	dtime = ((uint32_t)seconds)
+		+ (((uint32_t)minutes) * 60L)
+		+ (((uint32_t)hours) * 3600L);
+	dtime = (dtime * 125L) / 108L;
+	return dtime;
+}
+
+
 void QF_onStartup(void)
 {
+	Q_ASSERT(twi.ready);
 	Q_ASSERT(buttons.ready);
 	Q_ASSERT(dclock.ready);
 	Q_ASSERT(alarm.ready);
+
+	serial_drain();
 
 	BSP_QF_onStartup();
 }
@@ -155,6 +188,36 @@ static void displayTime(struct DClock *me)
 }
 
 
+// FIXME make this take enough parameters to do a write to the RTC (register address) followed by a read or a write.  twi does two requests for a reason.
+
+static void start_rtc_twi_request(struct DClock *me,
+				  uint8_t reg, uint8_t nbytes, uint8_t rw)
+{
+	SERIALSTR("Sending a TWI request\r\n");
+
+	me->twiRequest0.qactive = (QActive*)me;
+	me->twiRequest0.signal = TWI_REPLY_0_SIGNAL;
+	me->twiRequest0.bytes = me->twiBuffer0;
+	me->twiBuffer0[0] = reg;
+	me->twiRequest0.nbytes = 1;
+	me->twiRequest0.address = RTC_ADDR << 1; /* RW = 0, write */
+	me->twiRequest0.count = 0;
+	me->twiRequest0.status = 0;
+	me->twiRequestAddresses[0] = &(me->twiRequest0);
+
+	me->twiRequest1.qactive = (QActive*)me;
+	me->twiRequest1.signal = TWI_REPLY_1_SIGNAL;
+	me->twiRequest1.bytes = me->twiBuffer1;
+	me->twiRequest1.nbytes = nbytes;
+	me->twiRequest1.address = (RTC_ADDR << 1) | (rw ? 1 : 0);
+	me->twiRequest1.count = 0;
+	me->twiRequest1.status = 0;
+	me->twiRequestAddresses[1] = &(me->twiRequest1);
+
+	post(&twi, TWI_REQUEST_SIGNAL, (QParam)((uint16_t)(&(me->twiRequestAddresses))));
+}
+
+
 static QState dclockState(struct DClock *me)
 {
 	uint8_t d32counter;
@@ -163,7 +226,42 @@ static QState dclockState(struct DClock *me)
 	case Q_ENTRY_SIG:
 		me->ready = 73;	/* (V)(;,,,;)(V) */
 		lcd_clear();
+		start_rtc_twi_request(me, 0, 3, 1); /* Start from register 0, 3
+						       bytes, read */
 		return Q_HANDLED();
+
+	case TWI_REPLY_0_SIGNAL:
+		SERIALSTR("TWI_REPLY_0_SIGNAL: ");
+		serial_send_rom(twi_status_string(me->twiRequest0.status));
+		SERIALSTR("\r\n");
+		SERIALSTR("   status was 0x");
+		serial_send_hex_int(me->twiRequest0.status);
+		SERIALSTR(" &request=");
+		serial_send_hex_int((uint16_t)(&me->twiRequest0));
+		SERIALSTR("\r\n");
+		serial_drain();
+		return Q_HANDLED();
+
+	case TWI_REPLY_1_SIGNAL:
+		SERIALSTR("TWI_REPLY_1_SIGNAL: ");
+		serial_send_rom(twi_status_string(me->twiRequest1.status));
+		SERIALSTR("\r\n");
+		SERIALSTR("   status was 0x");
+		serial_send_hex_int(me->twiRequest1.status);
+		SERIALSTR(" &request=");
+		serial_send_hex_int((uint16_t)(&me->twiRequest1));
+		SERIALSTR("\r\n");
+		SERIALSTR("    bytes=");
+		serial_send_hex_int(me->twiBuffer1[0]);
+		SERIALSTR(",");
+		serial_send_hex_int(me->twiBuffer1[1]);
+		SERIALSTR(",");
+		serial_send_hex_int(me->twiBuffer1[2]);
+		SERIALSTR("\r\n");
+		serial_drain();
+		me->dseconds = rtc_time_to_decimal_time(me->twiBuffer1);
+		return Q_HANDLED();
+
 	case WATCHDOG_SIGNAL:
 		BSP_watchdog(me);
 		return Q_HANDLED();

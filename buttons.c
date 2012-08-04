@@ -45,6 +45,8 @@ static QState buttonRepeatingState(struct Buttons *me);
 void
 buttons_ctor(void)
 {
+	SERIALSTR("buttons_ctor()\r\n");
+	serial_drain();
 	QActive_ctor((QActive *)(&buttons), (QStateHandler)&buttonsInitial);
 	buttons.whichButton = 0;
 	buttons.repeatCount = 0;
@@ -64,6 +66,8 @@ static QState buttonsState(struct Buttons *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
+		SERIALSTR("buttonsState Q_ENTRY_SIG\r\n");
+		serial_drain();
 		me->ready = 73;
 		return Q_HANDLED();
 	case TICK_DECIMAL_32_SIGNAL:
