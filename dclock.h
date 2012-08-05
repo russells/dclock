@@ -70,6 +70,11 @@ enum DClockSignals {
 	UPDATE_MINUTES_TIMEOUT_SIGNAL,
 	UPDATE_SECONDS_TIMEOUT_SIGNAL,
 
+	/**
+	 * The time has been changed, so set it and write to the RTC.
+	 */
+	SET_TIME_SIGNAL,
+
 	TWI_REQUEST_SIGNAL,
 	TWI_REPLY_SIGNAL,
 	TWI_FINISHED_SIGNAL,

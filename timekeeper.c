@@ -26,9 +26,11 @@ struct Timekeeper timekeeper;
 
 static QState tkInitial                (struct Timekeeper *me);
 static QState tkState                  (struct Timekeeper *me);
+static QState tkSetTimeState           (struct Timekeeper *me);
 
-static void start_rtc_twi_request(struct Timekeeper *me,
-				  uint8_t reg, uint8_t nbytes, uint8_t rw);
+static void start_rtc_twi_read(struct Timekeeper *me,
+			       uint8_t reg, uint8_t nbytes, uint8_t rw);
+static void decimal_time_to_rtc_time(uint32_t dtime, uint8_t *bytes);
 
 void timekeeper_ctor(void)
 {
@@ -73,8 +75,8 @@ static QState tkState(struct Timekeeper *me)
 	switch(Q_SIG(me)) {
 
 	case Q_ENTRY_SIG:
-		start_rtc_twi_request(me, 0, 3, 1); /* Start from register 0, 3
-						       bytes, read */
+		start_rtc_twi_read(me, 0, 3, 1); /* Start from register 0, 3
+						    bytes, read */
 		return Q_HANDLED();
 
 	case TWI_REPLY_0_SIGNAL:
@@ -132,11 +134,76 @@ static QState tkState(struct Timekeeper *me)
 		post_r((&dclock), TICK_DECIMAL_SIGNAL, me->dseconds);
 		return Q_HANDLED();
 
+	case SET_TIME_SIGNAL:
+		me->dseconds = (uint32_t)(Q_PAR(me));
+		return Q_TRAN(tkSetTimeState);
+
 	case WATCHDOG_SIGNAL:
 		BSP_watchdog();
 		return Q_HANDLED();
 	}
 	return Q_SUPER(QHsm_top);
+}
+
+
+static QState
+tkSetTimeState(struct Timekeeper *me)
+{
+	uint8_t status;
+
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		SERIALSTR("tkSetTimeState\r\n");
+		BSP_set_decimal_32_counter(0);
+
+		/* Set up a TWI buffer to write the time. */
+		me->twiBuffer0[0] = 0x00; /* Register address. */
+		decimal_time_to_rtc_time(me->dseconds, me->twiBuffer0 + 1);
+		me->twiBuffer0[4] = 0x01; /* Day */
+		me->twiBuffer0[5] = 0x01; /* Date */
+		me->twiBuffer0[6] = 0x01; /* Month/Century */
+		me->twiBuffer0[7] = 0x99; /* Year */
+		me->twiRequest0.qactive = (QActive*)me;
+		me->twiRequest0.signal = TWI_REPLY_0_SIGNAL;
+		me->twiRequest0.bytes = me->twiBuffer0;
+		me->twiRequest0.nbytes = 8;
+		me->twiRequest0.address = RTC_ADDR << 1; /* |0 for write. */
+		me->twiRequest0.count = 0;
+		me->twiRequest0.status = 0;
+		me->twiRequestAddresses[0] = &(me->twiRequest0);
+		me->twiRequestAddresses[1] = 0;
+
+		SERIALSTR("    bytes=");
+		for (uint8_t i=0; i<8; i++) {
+			SERIALSTR(" ");
+			serial_send_hex_int(me->twiBuffer0[i]);
+		}
+		SERIALSTR("\r\n");
+
+		post(&twi, TWI_REQUEST_SIGNAL,
+		     (QParam)((uint16_t)(&(me->twiRequestAddresses))));
+		return Q_HANDLED();
+
+	case TWI_REPLY_0_SIGNAL:
+		status = me->twiRequest0.status;
+		switch (status) {
+		case 0xf8:
+			SERIALSTR("tkSetTimeState: TWI_REPLY_0_SIGNAL\r\n");
+			/* The first part was successful, so we do nothing and
+			   wait for the second part to complete. */
+			return Q_HANDLED();
+		default:
+			SERIALSTR("tkSetTimeState: TWI_REPLY_0_SIGNAL: ");
+			serial_send_rom(twi_status_string(status));
+			SERIALSTR("\r\n");
+			return Q_TRAN(tkState);
+		}
+
+	case Q_EXIT_SIG:
+		SERIALSTR("tkSetTimeState exits\r\n");
+		return Q_HANDLED();
+	}
+	return Q_SUPER(tkState);
 }
 
 
@@ -160,6 +227,27 @@ rtc_time_to_decimal_time(const uint8_t *bytes)
 }
 
 
+static void
+decimal_time_to_rtc_time(uint32_t dtime, uint8_t *bytes)
+{
+	uint32_t dayseconds;
+	uint8_t hours, minutes, seconds;
+
+	Q_ASSERT( dtime <= 99999 );
+
+	dayseconds = (dtime * 108L) / 125L;
+	Q_ASSERT( dayseconds <= 86399 );
+
+	seconds = dayseconds % 60;
+	minutes = (dayseconds / 60L) % 60;
+	hours = (dayseconds / 3600L) % 24;
+
+	bytes[0] = (seconds % 10) | ((seconds / 10) << 4);
+	bytes[1] = (minutes % 10) | ((minutes / 10) << 4);
+	bytes[2] = (hours   % 10) | ((hours   / 10) << 4);
+}
+
+
 uint32_t
 get_dseconds(struct Timekeeper *me)
 {
@@ -169,14 +257,18 @@ get_dseconds(struct Timekeeper *me)
 
 void set_dseconds(struct Timekeeper *me, uint32_t ds)
 {
-	me->dseconds = ds;
+	post_r(me, SET_TIME_SIGNAL, (QParam)ds);
 }
 
 static void
-start_rtc_twi_request(struct Timekeeper *me,
-		      uint8_t reg, uint8_t nbytes, uint8_t rw)
+start_rtc_twi_read(struct Timekeeper *me,
+		   uint8_t reg, uint8_t nbytes, uint8_t rw)
 {
-	SERIALSTR("Sending a TWI request\r\n");
+	static char buffer[100];
+
+	snprintf(buffer, 99, "tk>TWI: reg=%d nbytes=%d rw=%c\r\n",
+		 reg, nbytes, rw ? 'R' : 'W');
+	serial_send(buffer);
 
 	me->twiRequest0.qactive = (QActive*)me;
 	me->twiRequest0.signal = TWI_REPLY_0_SIGNAL;

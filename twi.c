@@ -354,6 +354,7 @@ static void twi_int_error(struct TWI *me, uint8_t status)
 static void twint_start_sent(struct TWI *me)
 {
 	uint8_t status;
+	uint8_t address;
 
 	status = TWSR & 0xf8;
 	switch (status) {
@@ -361,14 +362,17 @@ static void twint_start_sent(struct TWI *me)
 	case TWI_10_REPEATED_START_SENT:
 		//SERIALSTR("<SS");
 		if (me->requests[me->requestIndex]->address & 0b1) {
-			//SERIALSTR(":R>");
+			//SERIALSTR(":R:");
 			twint = twint_MR_address_sent;
 		} else {
-			//SERIALSTR(":T>");
+			//SERIALSTR(":T:");
 			twint = twint_MT_address_sent;
 		}
 		/* Address includes R/W */
-		TWDR = me->requests[me->requestIndex]->address;
+		address = me->requests[me->requestIndex]->address;
+		//serial_send_hex_int(address);
+		//SERIALSTR(">");
+		TWDR = address;
 		TWCR =  (1 << TWINT) |
 			(1 << TWEN ) |
 			(1 << TWIE );
@@ -392,12 +396,14 @@ static void twint_MT_address_sent(struct TWI *me)
 	status = TWSR & 0xf8;
 	switch (status) {
 	case TWI_18_MT_SLA_W_TX_ACK_RX:
-		//SERIALSTR("<MTAA>");
+		//SERIALSTR("<MTAA");
 		/* We've sent an address or previous data, and got an ACK.  If
 		   there is data to send, send the first byte.  If not,
 		   finish. */
 		if (me->requests[me->requestIndex]->nbytes) {
 			uint8_t data = me->requests[me->requestIndex]->bytes[0];
+			//SERIALSTR("_");
+			//serial_send_hex_int(data);
 			me->requests[me->requestIndex]->count ++;
 			TWDR = data;
 			twint = twint_MT_data_sent;
@@ -412,6 +418,7 @@ static void twint_MT_address_sent(struct TWI *me)
 				(1 << TWEN ) |
 				(1 << TWIE );
 		}
+		//SERIALSTR(">");
 		break;
 
 	case TWI_20_MT_SLA_W_TX_NACK_RX:
@@ -469,8 +476,10 @@ static void twint_MT_data_sent(struct TWI *me)
 			}
 
 		} else {
-			//SERIALSTR("<MTD_>");
+			//SERIALSTR("<MTD_");
 			data = request->bytes[request->count];
+			//serial_send_hex_int(data);
+			//SERIALSTR(">");
 			request->count ++;
 			TWDR = data;
 			/* All good, keep going */
