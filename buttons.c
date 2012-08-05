@@ -42,6 +42,43 @@ static QState buttonLongState(struct Buttons *me);
 static QState buttonRepeatingState(struct Buttons *me);
 
 
+#define s 1,
+#define u 2,
+#define d 3,
+
+
+static const uint8_t Q_ROM secret[] = {
+	u d u d u u d d s s s s 0
+};
+
+
+static uint8_t secretIndex = 0;
+static uint8_t secretTimeout = 0;
+
+/* Ticks, currently 1/37 second. */
+#define SECRET_TIMEOUT 37
+
+
+static void
+updateSecret(uint8_t press)
+{
+	if (press == Q_ROM_BYTE(secret[secretIndex])) {
+		secretIndex++;
+		secretTimeout = SECRET_TIMEOUT;
+		if (0 == Q_ROM_BYTE(secret[secretIndex])) {
+			secretIndex = 0;
+			secretTimeout = 0;
+			SERIALSTR("SECRET\r\n");
+		} else {
+			secretTimeout = SECRET_TIMEOUT;
+		}
+	} else if (secretIndex) {
+		secretIndex = 0;
+		secretTimeout = 0;
+	}
+}
+
+
 void
 buttons_ctor(void)
 {
@@ -71,6 +108,12 @@ static QState buttonsState(struct Buttons *me)
 		me->ready = 73;
 		return Q_HANDLED();
 	case TICK_DECIMAL_32_SIGNAL:
+		if (secretTimeout) {
+			secretTimeout --;
+			if (0 == secretTimeout) {
+				secretIndex = 0;
+			}
+		}
 		button = BSP_getButton();
 		switch (button) {
 		default: /* Shouldn't happen - handle as though nothing is
@@ -140,6 +183,7 @@ static QState buttonDownState(struct Buttons *me)
 			post(&alarm, BUTTON_DOWN_PRESS_SIGNAL, 0);
 			break;
 		}
+		updateSecret(me->whichButton);
 		return Q_HANDLED();
 
 	case BUTTONS_UP_SIGNAL:
