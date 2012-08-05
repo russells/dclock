@@ -90,19 +90,6 @@ void dclock_ctor(void);
  */
 struct DClock {
 	QActive super;
-	uint32_t dseconds;
-	/** Holder for our TWI request. */
-	struct TWIRequest twiRequest0;
-	uint8_t twiBuffer0[12];
-	/** Holder for our TWI request. */
-	struct TWIRequest twiRequest1;
-	uint8_t twiBuffer1[12];
-	/** This contains the addresses of one or both of the TWIRequests
-	    above.  When we do consecutive TWI operations (which means keeping
-	    control of the bus between the operations and only receiving a
-	    result after both have finished) we fill in both pointers.  For a
-	    single operation, only fill in the first pointer. */
-        struct TWIRequest *twiRequestAddresses[2];
 	/** Set false when we enter the time setting states, true when we
 	    change the time in the time setting states.  Used to decide whether
 	    or not to set the current time after we've finished in the time

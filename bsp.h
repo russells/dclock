@@ -46,7 +46,7 @@ void BSP_lcd_pwm(uint8_t pwm);
 void BSP_lcd_pwm_on(void);
 void BSP_lcd_pwm_off(void);
 
-void BSP_watchdog(struct DClock *me);
+void BSP_watchdog(void);
 
 
 void BSP_set_decimal_32_counter(uint8_t dc);

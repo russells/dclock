@@ -1,5 +1,6 @@
 #include "bsp.h"
 #include "dclock.h"
+#include "timekeeper.h"
 #include "buttons.h"
 #include "serial.h"
 #include "toggle-pin.h"
@@ -58,7 +59,7 @@ void Q_onAssert(char const Q_ROM * const Q_ROM_VAR file, int line)
 }
 
 
-void BSP_watchdog(struct DClock *me)
+void BSP_watchdog(void)
 {
 	wdt_reset();
 	WDTCSR |= (1 << WDIE);
@@ -168,13 +169,13 @@ SIGNAL(TIMER1_COMPA_vect)
 	/* Increment the counter before sending the event.  We should never
 	   send a zero.  No real reason, just the way it is. */
 	decimal_32_counter ++;
-	postISR_r((&dclock), TICK_DECIMAL_32_SIGNAL, decimal_32_counter);
+	postISR_r((&timekeeper), TICK_DECIMAL_32_SIGNAL, decimal_32_counter);
 	/* The buttons don't care where we are in the second, so don't send the
 	   counter with this signal. */
 	postISR_r((&buttons), TICK_DECIMAL_32_SIGNAL, 0);
 	watchdog_counter ++;
 	if (watchdog_counter >= 7) {
-		postISR_r((&dclock), WATCHDOG_SIGNAL, 0);
+		postISR_r((&timekeeper), WATCHDOG_SIGNAL, 0);
 		watchdog_counter = 0;
 		/* Turn on the Arduino LED.  It gets turned off when
 		   WATCHDOG_SIGNAL is handled. */

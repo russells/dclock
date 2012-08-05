@@ -12,6 +12,7 @@
 #include "toggle-pin.h"
 #include "twi.h"
 #include "twi-status.h"
+#include "timekeeper.h"
 #include "rtc.h"
 #include <string.h>
 #include <stdio.h>
@@ -36,6 +37,7 @@ static QEvent twiQueue[4];
 static QEvent dclockQueue[4];
 static QEvent buttonsQueue[4];
 static QEvent alarmQueue[4];
+static QEvent timekeeperQueue[4];
 
 /* The order of these objects is important, firstly because it determines
    priority, but also because it determines the order in which they are
@@ -47,6 +49,7 @@ QActiveCB const Q_ROM Q_ROM_VAR QF_active[] = {
 	{ (QActive *)(&buttons)     , buttonsQueue     , Q_DIM(buttonsQueue)      },
 	{ (QActive *)(&dclock)      , dclockQueue      , Q_DIM(dclockQueue)       },
 	{ (QActive *)(&alarm)       , alarmQueue       , Q_DIM(alarmQueue)        },
+	{ (QActive *)(&timekeeper)  , timekeeperQueue  , Q_DIM(timekeeperQueue)   },
 };
 /* If QF_MAX_ACTIVE is incorrectly defined, the compiler says something like:
    lapclock.c:68: error: size of array ‘Q_assert_compile’ is negative
@@ -73,6 +76,7 @@ int main(int argc, char **argv)
 	if (mcusr & (1 << PORF)) SERIALSTR(" PO");
 	SERIALSTR("\r\n");
 	twi_ctor();
+	timekeeper_ctor();
 	lcd_init();
 	dclock_ctor();
 	buttons_ctor();
@@ -90,29 +94,10 @@ int main(int argc, char **argv)
 }
 
 
-static uint32_t
-rtc_time_to_decimal_time(const uint8_t *bytes)
-{
-	uint8_t seconds;
-	uint8_t minutes;
-	uint8_t hours;
-	uint32_t dtime;
-
-	seconds = (bytes[0] & 0x0f) + (10 * ((bytes[0] & 0xf0) >> 4));
-	minutes = (bytes[1] & 0x0f) + (10 * ((bytes[1] & 0xf0) >> 4));
-	hours   = (bytes[2] & 0x0f) + (10 * ((bytes[2] & 0xf0) >> 4));
-
-	dtime = ((uint32_t)seconds)
-		+ (((uint32_t)minutes) * 60L)
-		+ (((uint32_t)hours) * 3600L);
-	dtime = (dtime * 125L) / 108L;
-	return dtime;
-}
-
-
 void QF_onStartup(void)
 {
 	Q_ASSERT(twi.ready);
+	Q_ASSERT(timekeeper.ready);
 	Q_ASSERT(buttons.ready);
 	Q_ASSERT(dclock.ready);
 	Q_ASSERT(alarm.ready);
@@ -128,7 +113,6 @@ void dclock_ctor(void)
 	QActive_ctor((QActive *)(&dclock), (QStateHandler)&dclockInitial);
 	/* Using this value as the initial time allows us to test the code that
 	   moves the time across the display each minute. */
-	dclock.dseconds = 11745;
 	dclock.ready = 0;
 }
 
@@ -142,42 +126,17 @@ static QState dclockInitial(struct DClock *me)
 }
 
 
-static void inc_dseconds(struct DClock *me)
-{
-	/* There is no need to disable interrupts while we access or update
-	   dseconds, even though it's a four byte variable, as we never touch
-	   it during an interrupt handler. */
-
-	if (me->dseconds > 99999) {
-		SERIALSTR("me->dseconds == ");
-		char ds[12];
-		snprintf(ds, 12, "%lu", me->dseconds);
-		serial_send(ds);
-		SERIALSTR("\r\n");
-		_delay_ms(30);
-	}
-	Q_ASSERT( me->dseconds <= 99999 );
-	if (99999 == me->dseconds) {
-		me->dseconds = 0;
-	} else {
-		me->dseconds++;
-	}
-}
-
-
-static void displayTime(struct DClock *me)
+static void displayTime(struct DClock *me, uint32_t dseconds)
 {
 	char line[17];
-	uint32_t sec;
 	uint8_t h, m, s;
 	uint8_t spaces;
 
-	sec = me->dseconds;
-	s = sec % 100;
-	sec /= 100;
-	m = sec % 100;
-	sec /= 100;
-	h = sec % 100;
+	s = dseconds % 100;
+	dseconds /= 100;
+	m = dseconds % 100;
+	dseconds /= 100;
+	h = dseconds % 100;
 	spaces = m % 9;
 	for (uint8_t i=0; i<spaces; i++) {
 		line[i] = ' ';
@@ -188,104 +147,16 @@ static void displayTime(struct DClock *me)
 }
 
 
-// FIXME make this take enough parameters to do a write to the RTC (register address) followed by a read or a write.  twi does two requests for a reason.
-
-static void start_rtc_twi_request(struct DClock *me,
-				  uint8_t reg, uint8_t nbytes, uint8_t rw)
-{
-	SERIALSTR("Sending a TWI request\r\n");
-
-	me->twiRequest0.qactive = (QActive*)me;
-	me->twiRequest0.signal = TWI_REPLY_0_SIGNAL;
-	me->twiRequest0.bytes = me->twiBuffer0;
-	me->twiBuffer0[0] = reg;
-	me->twiRequest0.nbytes = 1;
-	me->twiRequest0.address = RTC_ADDR << 1; /* RW = 0, write */
-	me->twiRequest0.count = 0;
-	me->twiRequest0.status = 0;
-	me->twiRequestAddresses[0] = &(me->twiRequest0);
-
-	me->twiRequest1.qactive = (QActive*)me;
-	me->twiRequest1.signal = TWI_REPLY_1_SIGNAL;
-	me->twiRequest1.bytes = me->twiBuffer1;
-	me->twiRequest1.nbytes = nbytes;
-	me->twiRequest1.address = (RTC_ADDR << 1) | (rw ? 1 : 0);
-	me->twiRequest1.count = 0;
-	me->twiRequest1.status = 0;
-	me->twiRequestAddresses[1] = &(me->twiRequest1);
-
-	post(&twi, TWI_REQUEST_SIGNAL, (QParam)((uint16_t)(&(me->twiRequestAddresses))));
-}
-
-
 static QState dclockState(struct DClock *me)
 {
-	uint8_t d32counter;
-
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		me->ready = 73;	/* (V)(;,,,;)(V) */
 		lcd_clear();
-		start_rtc_twi_request(me, 0, 3, 1); /* Start from register 0, 3
-						       bytes, read */
-		return Q_HANDLED();
-
-	case TWI_REPLY_0_SIGNAL:
-		SERIALSTR("TWI_REPLY_0_SIGNAL: ");
-		serial_send_rom(twi_status_string(me->twiRequest0.status));
-		SERIALSTR("\r\n");
-		SERIALSTR("   status was 0x");
-		serial_send_hex_int(me->twiRequest0.status);
-		SERIALSTR(" &request=");
-		serial_send_hex_int((uint16_t)(&me->twiRequest0));
-		SERIALSTR("\r\n");
-		serial_drain();
-		return Q_HANDLED();
-
-	case TWI_REPLY_1_SIGNAL:
-		SERIALSTR("TWI_REPLY_1_SIGNAL: ");
-		serial_send_rom(twi_status_string(me->twiRequest1.status));
-		SERIALSTR("\r\n");
-		SERIALSTR("   status was 0x");
-		serial_send_hex_int(me->twiRequest1.status);
-		SERIALSTR(" &request=");
-		serial_send_hex_int((uint16_t)(&me->twiRequest1));
-		SERIALSTR("\r\n");
-		SERIALSTR("    bytes=");
-		serial_send_hex_int(me->twiBuffer1[0]);
-		SERIALSTR(",");
-		serial_send_hex_int(me->twiBuffer1[1]);
-		SERIALSTR(",");
-		serial_send_hex_int(me->twiBuffer1[2]);
-		SERIALSTR("\r\n");
-		serial_drain();
-		me->dseconds = rtc_time_to_decimal_time(me->twiBuffer1);
-		return Q_HANDLED();
-
-	case WATCHDOG_SIGNAL:
-		BSP_watchdog(me);
-		return Q_HANDLED();
-	case TICK_DECIMAL_32_SIGNAL:
-		d32counter = (uint8_t) Q_PAR(me);
-		Q_ASSERT( d32counter != 0 );
-		Q_ASSERT( d32counter <= 32 );
-		if (d32counter == 32) {
-			/* We set the decimal 1/32 second counter early, to
-			   avoid the possibility that the second calculations
-			   and display take much longer than the time before
-			   the next timer interrupt, and therefore before the
-			   next signal arrives. */
-			BSP_set_decimal_32_counter(0);
-			/* We've counted 32 parts of a decimal second, so tick
-			   over to the next second. */
-			post(me, TICK_DECIMAL_SIGNAL, 0);
-		}
 		return Q_HANDLED();
 
 	case TICK_DECIMAL_SIGNAL:
-		inc_dseconds(me);
-		displayTime(me);
-		post_r((&alarm), TICK_DECIMAL_SIGNAL, me->dseconds);
+		displayTime(me, Q_PAR(me));
 		return Q_HANDLED();
 
 	case BUTTON_SELECT_PRESS_SIGNAL:
@@ -399,7 +270,7 @@ static QState dclockSetState(struct DClock *me)
 {
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG: {
-		uint32_t sec = me->dseconds;
+		uint32_t sec = get_dseconds(&timekeeper);
 
 		me->timeSetChanged = 0;
 		me->setSeconds = sec % 100;
@@ -411,13 +282,7 @@ static QState dclockSetState(struct DClock *me)
 		return Q_HANDLED();
 	}
 	case TICK_DECIMAL_SIGNAL:
-		/* We update the decimal seconds counter while in here, but
-		   don't take any other action, as we're displaying the new set
-		   time.  The seconds continue to tick over in response to
-		   TICK_DECIMAL_SIGNAL (here) and TICK_DECIMAL_32_SIGNAL
-		   (above), so if the time does not get changed in here we
-		   don't lose track. */
-		inc_dseconds(me);
+		/* Ignore the seconds ticking over while setting the time. */
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_SIGNAL:
 		/* We get this whenever the user changes one of the hours,
@@ -465,11 +330,13 @@ static QState dclockSetState(struct DClock *me)
 		LCD_LINE2_ROM("                ");
 		lcd_cursor_off();
 		if (me->timeSetChanged) {
-			me->dseconds = (me->setHours * 10000L)
-				+ (me->setMinutes * 100L) + me->setSeconds;
+			set_dseconds(&timekeeper,
+				     (me->setHours * 10000L)
+				     + (me->setMinutes * 100L)
+				     + me->setSeconds);
 		}
 		lcd_clear();
-		displayTime(me);
+		displayTime(me, get_dseconds(&timekeeper));
 		return Q_HANDLED();
 	}
 	return Q_SUPER(dclockState);
