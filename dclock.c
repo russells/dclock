@@ -24,13 +24,14 @@ struct DClock dclock;
 
 Q_DEFINE_THIS_FILE;
 
-static QState dclockInitial          (struct DClock *me);
-static QState dclockState            (struct DClock *me);
+static QState dclockInitial            (struct DClock *me);
+static QState dclockState              (struct DClock *me);
 static QState dclockTempBrightnessState(struct DClock *me);
-static QState dclockSetState         (struct DClock *me);
-static QState dclockSetHoursState    (struct DClock *me);
-static QState dclockSetMinutesState  (struct DClock *me);
-static QState dclockSetSecondsState  (struct DClock *me);
+static QState dclockSetTimeState       (struct DClock *me);
+static QState dclockSetHoursState      (struct DClock *me);
+static QState dclockSetMinutesState    (struct DClock *me);
+static QState dclockSetSecondsState    (struct DClock *me);
+static QState dclockSetAlarmState      (struct DClock *me);
 
 
 static QEvent twiQueue[4];
@@ -114,6 +115,7 @@ void dclock_ctor(void)
 	/* Using this value as the initial time allows us to test the code that
 	   moves the time across the display each minute. */
 	dclock.ready = 0;
+	dclock.settingWhich = 0;
 }
 
 
@@ -161,10 +163,21 @@ static QState dclockState(struct DClock *me)
 
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		if (lcd_get_brightness()) {
-			return Q_TRAN(dclockSetHoursState);
+			return Q_HANDLED();
 		} else {
 			return Q_TRAN(dclockTempBrightnessState);
 		}
+	case BUTTON_SELECT_RELEASE_SIGNAL:
+		/* We react to a release signal because we want to distinguish
+		   between a button press and a long press.  If we see a
+		   release signal here, that means that we must have had a
+		   short press, otherwise we would have transitioned out of
+		   this state via a long press. */
+		me->settingWhich = SETTING_ALARM;
+		return Q_TRAN(dclockSetHoursState);
+	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
+		me->settingWhich = SETTING_TIME;
+		return Q_TRAN(dclockSetHoursState);
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
 		lcd_inc_brightness();
@@ -189,6 +202,10 @@ static QState dclockTempBrightnessState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_SELECT_RELEASE_SIGNAL:
 		return Q_TRAN(dclockState);
+	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
+		/* Ignore this signal because it's used by the parent state to
+		   transition somewhere else. */
+		return Q_HANDLED();
 	case BUTTON_SELECT_REPEAT_SIGNAL:
 		switch (counter) {
 		case 0:
@@ -238,7 +255,7 @@ static void displaySettingTime(struct DClock *me)
  *
  * The string is stored in ROM.
  */
-static void displayMenuName(const char PROGMEM *name)
+static void displayMenuName(const char Q_ROM *name)
 {
 	char line[17];
 	uint8_t i;
@@ -269,18 +286,9 @@ static void displayMenuName(const char PROGMEM *name)
 static QState dclockSetState(struct DClock *me)
 {
 	switch (Q_SIG(me)) {
-	case Q_ENTRY_SIG: {
-		uint32_t sec = get_dseconds(&timekeeper);
-
+	case Q_ENTRY_SIG:
 		me->timeSetChanged = 0;
-		me->setSeconds = sec % 100;
-		sec /= 100;
-		me->setMinutes = sec % 100;
-		sec /= 100;
-		me->setHours = sec % 10;
-		displaySettingTime(me);
 		return Q_HANDLED();
-	}
 	case TICK_DECIMAL_SIGNAL:
 		/* Ignore the seconds ticking over while setting the time. */
 		return Q_HANDLED();
@@ -299,7 +307,6 @@ static QState dclockSetState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 	case BUTTON_SELECT_REPEAT_SIGNAL:
-	case BUTTON_SELECT_RELEASE_SIGNAL:
 	case BUTTON_UP_LONG_PRESS_SIGNAL:
 	case BUTTON_UP_RELEASE_SIGNAL:
 	case BUTTON_DOWN_LONG_PRESS_SIGNAL:
@@ -308,6 +315,8 @@ static QState dclockSetState(struct DClock *me)
 		   may do things with them that will interfere with time
 		   setting. */
 		return Q_HANDLED();
+	case BUTTON_SELECT_RELEASE_SIGNAL:
+		return Q_TRAN(dclockState);
 	case UPDATE_TIME_TIMEOUT_SIGNAL:
 		/* Any of our child states can time out.  When they do, we get
 		   this signal to tell us that, and we abort the time setting.
@@ -329,12 +338,6 @@ static QState dclockSetState(struct DClock *me)
 		Q_ASSERT( me->setSeconds <= 99 );
 		LCD_LINE2_ROM("                ");
 		lcd_cursor_off();
-		if (me->timeSetChanged) {
-			set_dseconds(&timekeeper,
-				     (me->setHours * 10000L)
-				     + (me->setMinutes * 100L)
-				     + me->setSeconds);
-		}
 		lcd_clear();
 		displayTime(me, get_dseconds(&timekeeper));
 		return Q_HANDLED();
@@ -343,9 +346,91 @@ static QState dclockSetState(struct DClock *me)
 }
 
 
+static QState dclockSetTimeState(struct DClock *me)
+{
+	uint32_t sec;
+
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		SERIALSTR("> dclockSetTimeState\r\n");
+		sec = get_dseconds(&timekeeper);
+
+		me->setSeconds = sec % 100;
+		sec /= 100;
+		me->setMinutes = sec % 100;
+		sec /= 100;
+		me->setHours = sec % 10;
+		displaySettingTime(me);
+		return Q_HANDLED();
+	case Q_EXIT_SIG:
+		SERIALSTR("< dclockSetTimeState\r\n");
+		/* These three values are all unsigned and can all be zero, so
+		   we don't need to check the lower bound. */
+		Q_ASSERT( me->setHours <= 9 );
+		Q_ASSERT( me->setMinutes <= 99 );
+		Q_ASSERT( me->setSeconds <= 99 );
+		if (me->timeSetChanged) {
+			set_dseconds(&timekeeper,
+				     (me->setHours * 10000L)
+				     + (me->setMinutes * 100L)
+				     + me->setSeconds);
+		}
+		return Q_HANDLED();
+	}
+	return Q_SUPER(dclockSetState);
+}
+
+
+static QState dclockSetAlarmState(struct DClock *me)
+{
+	uint32_t sec;
+
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		SERIALSTR("> dclockSetAlarmState\r\n");
+		sec = get_alarm_dseconds(&alarm);
+
+		me->setSeconds = sec % 100;
+		sec /= 100;
+		me->setMinutes = sec % 100;
+		sec /= 100;
+		me->setHours = sec % 10;
+		displaySettingTime(me);
+		return Q_HANDLED();
+	case Q_EXIT_SIG:
+		SERIALSTR("< dclockSetAlarmState\r\n");
+		/* These three values are all unsigned and can all be zero, so
+		   we don't need to check the lower bound. */
+		Q_ASSERT( me->setHours <= 9 );
+		Q_ASSERT( me->setMinutes <= 99 );
+		Q_ASSERT( me->setSeconds <= 99 );
+		if (me->timeSetChanged) {
+			set_alarm_dseconds(&alarm,
+					   (me->setHours * 10000L)
+					   + (me->setMinutes * 100L)
+					   + me->setSeconds);
+		}
+		return Q_HANDLED();
+	}
+	return Q_SUPER(dclockSetState);
+}
+
+
+/**
+ * This state has two parent states - dclockSetTimeState() and
+ * dclockSetAlarmState().
+ *
+ * The parent state is selected dynamically based on which of the current time
+ * or the alarm time we are setting right now.  That decision is based on
+ * me->settingWhich, which should not change for the duration of any one time
+ * setting user operation.  settingWhich is set by the code that begins the
+ * transition to here (in dclockState()), and unset when we exit
+ * dclockSetState().
+ */
 static QState dclockSetHoursState(struct DClock *me)
 {
-	static const char PROGMEM setTimeHoursName[] = "Set hours:";
+	static const char Q_ROM setTimeHoursName[] = "Set hours:";
+	static const char Q_ROM setAlarmHoursName[] = "Alarm hours:";
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
@@ -353,7 +438,16 @@ static QState dclockSetHoursState(struct DClock *me)
 				UPDATE_HOURS_TIMEOUT_SIGNAL);
 		me->setTimeouts = N_TSET_TOUTS;
 		displaySettingTime(me);
-		displayMenuName(setTimeHoursName);
+		switch (me->settingWhich) {
+		case SETTING_TIME:
+			displayMenuName(setTimeHoursName);
+			break;
+		case SETTING_ALARM:
+			displayMenuName(setAlarmHoursName);
+			break;
+		default:
+			Q_ASSERT(0);
+		}
 		lcd_set_cursor(1, 1);
 		return Q_HANDLED();
 	case UPDATE_HOURS_TIMEOUT_SIGNAL:
@@ -393,14 +487,29 @@ static QState dclockSetHoursState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(dclockSetMinutesState);
+	case BUTTON_SELECT_RELEASE_SIGNAL:
+		return Q_HANDLED();
 	}
-	return Q_SUPER(dclockSetState);
+
+	switch (me->settingWhich) {
+	case SETTING_TIME:
+		return Q_SUPER(dclockSetTimeState);
+	case SETTING_ALARM:
+		return Q_SUPER(dclockSetAlarmState);
+	default:
+		Q_ASSERT(0);
+		return Q_SUPER(dclockSetTimeState);
+	}
 }
 
 
+/**
+ * @see dclockSetHoursState()
+ */
 static QState dclockSetMinutesState(struct DClock *me)
 {
-	static const char PROGMEM setTimeMinutesName[] = "Set minutes:";
+	static const char Q_ROM setTimeMinutesName[] = "Set minutes:";
+	static const char Q_ROM setAlarmMinutesName[] = "Alarm minutes:";
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
@@ -408,7 +517,16 @@ static QState dclockSetMinutesState(struct DClock *me)
 				UPDATE_MINUTES_TIMEOUT_SIGNAL);
 		me->setTimeouts = N_TSET_TOUTS;
 		displaySettingTime(me);
-		displayMenuName(setTimeMinutesName);
+		switch (me->settingWhich) {
+		case SETTING_TIME:
+			displayMenuName(setTimeMinutesName);
+			break;
+		case SETTING_ALARM:
+			displayMenuName(setAlarmMinutesName);
+			break;
+		default:
+			Q_ASSERT(0);
+		}
 		lcd_set_cursor(1, 4);
 		return Q_HANDLED();
 	case UPDATE_MINUTES_TIMEOUT_SIGNAL:
@@ -448,14 +566,29 @@ static QState dclockSetMinutesState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(dclockSetSecondsState);
+	case BUTTON_SELECT_RELEASE_SIGNAL:
+		return Q_HANDLED();
 	}
-	return Q_SUPER(dclockSetState);
+
+	switch (me->settingWhich) {
+	case SETTING_TIME:
+		return Q_SUPER(dclockSetTimeState);
+	case SETTING_ALARM:
+		return Q_SUPER(dclockSetAlarmState);
+	default:
+		Q_ASSERT(0);
+		return Q_SUPER(dclockSetTimeState);
+	}
 }
 
 
+/**
+ * @see dclockSetHoursState()
+ */
 static QState dclockSetSecondsState(struct DClock *me)
 {
-	static const char PROGMEM setTimeSecondsName[] = "Set seconds:";
+	static const char Q_ROM setTimeSecondsName[] = "Set seconds:";
+	static const char Q_ROM setAlarmSecondsName[] = "Alarm seconds:";
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
@@ -463,7 +596,16 @@ static QState dclockSetSecondsState(struct DClock *me)
 				UPDATE_SECONDS_TIMEOUT_SIGNAL);
 		me->setTimeouts = N_TSET_TOUTS;
 		displaySettingTime(me);
-		displayMenuName(setTimeSecondsName);
+		switch (me->settingWhich) {
+		case SETTING_TIME:
+			displayMenuName(setTimeSecondsName);
+			break;
+		case SETTING_ALARM:
+			displayMenuName(setAlarmSecondsName);
+			break;
+		default:
+			Q_ASSERT(0);
+		}
 		lcd_set_cursor(1, 7);
 		return Q_HANDLED();
 	case UPDATE_SECONDS_TIMEOUT_SIGNAL:
@@ -502,7 +644,18 @@ static QState dclockSetSecondsState(struct DClock *me)
 		lcd_set_cursor(1, 7);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
-		return Q_TRAN(dclockState);
+		return Q_TRAN(dclockSetState);
+	case BUTTON_SELECT_RELEASE_SIGNAL:
+		return Q_HANDLED();
 	}
-	return Q_SUPER(dclockSetState);
+
+	switch (me->settingWhich) {
+	case SETTING_TIME:
+		return Q_SUPER(dclockSetTimeState);
+	case SETTING_ALARM:
+		return Q_SUPER(dclockSetAlarmState);
+	default:
+		Q_ASSERT(0);
+		return Q_SUPER(dclockSetTimeState);
+	}
 }

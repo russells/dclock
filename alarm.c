@@ -16,6 +16,18 @@ static QState alarmedOnState(struct Alarm *me);
 static QState alarmedOffState(struct Alarm *me);
 
 
+uint32_t get_alarm_dseconds(struct Alarm *me)
+{
+	return me->alarmTime;
+}
+
+
+void set_alarm_dseconds(struct Alarm *me, uint32_t dseconds)
+{
+	me->alarmTime = dseconds;
+}
+
+
 void alarm_ctor(void)
 {
 	SERIALSTR("alarm_ctor()\r\n");
@@ -115,7 +127,7 @@ static QState alarmedState(struct Alarm *me)
 		return Q_HANDLED();
 	case Q_TIMEOUT_SIG:
 		return Q_TRAN(topState);
-	case BUTTON_SELECT_PRESS_SIGNAL:
+	case BUTTON_SELECT_RELEASE_SIGNAL:
 		return Q_TRAN(topState);
 	case Q_EXIT_SIG:
 		SERIALSTR("Alarm stopped\r\n");

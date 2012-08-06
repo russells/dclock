@@ -21,4 +21,7 @@ extern struct Alarm alarm;
 
 void alarm_ctor(void);
 
+uint32_t get_alarm_dseconds(struct Alarm *me);
+void set_alarm_dseconds(struct Alarm *me, uint32_t dseconds);
+
 #endif

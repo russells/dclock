@@ -111,7 +111,13 @@ struct DClock {
 	uint8_t setTimeouts;
 	/** Set true when we are able to receive signals. */
 	uint8_t ready;
+	/** Indicates whether we are setting the time or the alarm. */
+	uint8_t settingWhich;
 };
+
+
+#define SETTING_ALARM 'A'
+#define SETTING_TIME 'T'
 
 
 struct DClock dclock;
