@@ -365,6 +365,7 @@ static QState dclockSetHoursState(struct DClock *me)
 			displaySettingTime(me);
 			QActive_arm_sig((QActive*)me, TSET_TOUT,
 					UPDATE_HOURS_TIMEOUT_SIGNAL);
+			post(me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		}
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
@@ -419,6 +420,7 @@ static QState dclockSetMinutesState(struct DClock *me)
 			displaySettingTime(me);
 			QActive_arm_sig((QActive*)me, TSET_TOUT,
 					UPDATE_MINUTES_TIMEOUT_SIGNAL);
+			post(me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		}
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
@@ -473,6 +475,7 @@ static QState dclockSetSecondsState(struct DClock *me)
 			displaySettingTime(me);
 			QActive_arm_sig((QActive*)me, TSET_TOUT,
 					UPDATE_SECONDS_TIMEOUT_SIGNAL);
+			post(me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		}
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
