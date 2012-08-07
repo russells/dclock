@@ -28,7 +28,7 @@ uint32_t dtimes_to_decimal_time(uint8_t *dtimes)
 	Q_ASSERT( dtimes[0] <= 9 );
 	Q_ASSERT( dtimes[1] <= 99 );
 	Q_ASSERT( dtimes[2] <= 99 );
-	return (dtimes[2] * 10000L) + (dtimes[1] * 100L) + dtimes[2];
+	return (dtimes[0] * 10000L) + (dtimes[1] * 100L) + dtimes[2];
 }
 
 

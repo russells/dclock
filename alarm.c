@@ -11,6 +11,8 @@ struct Alarm alarm;
 
 static QState initialState(struct Alarm *me);
 static QState topState(struct Alarm *me);
+static QState onState(struct Alarm *me);
+static QState offState(struct Alarm *me);
 static QState ignoreButtonsState(struct Alarm *me);
 static QState alarmedState(struct Alarm *me);
 static QState alarmedOnState(struct Alarm *me);
@@ -66,27 +68,20 @@ static QState initialState(struct Alarm *me)
 {
 	SERIALSTR("alarm initialState()\r\n");
 	serial_drain();
-	return Q_TRAN(topState);
+	return Q_TRAN(onState);
 }
 
 
 static QState topState(struct Alarm *me)
 {
-	uint32_t thetime;
-
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("alarm topState Q_ENTRY\r\n");
 		serial_drain();
 		me->ready = 73;
 		return Q_HANDLED();
-	case TICK_DECIMAL_SIGNAL:
-		thetime = Q_PAR(me);
-		if (thetime == me->alarmTime) {
-			return Q_TRAN(alarmedOnState);
-		} else {
-			return Q_HANDLED();
-		}
+	case ALARM_OFF_SIGNAL:
+		return Q_TRAN(offState);
 	case BUTTON_SELECT_PRESS_SIGNAL:
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 	case BUTTON_SELECT_REPEAT_SIGNAL:
@@ -103,6 +98,47 @@ static QState topState(struct Alarm *me)
 		return Q_HANDLED();
 	}
 	return Q_SUPER(&QHsm_top);
+}
+
+
+static QState onState(struct Alarm *me)
+{
+	uint32_t thetime;
+
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		me->armed = 73;
+		return Q_HANDLED();
+	case ALARM_OFF_SIGNAL:
+		return Q_TRAN(offState);
+	case ALARM_ON_SIGNAL:
+		return Q_HANDLED();
+	case TICK_DECIMAL_SIGNAL:
+		thetime = Q_PAR(me);
+		if (thetime == me->alarmTime) {
+			return Q_TRAN(alarmedOnState);
+		} else {
+			return Q_HANDLED();
+		}
+	}
+	return Q_SUPER(topState);
+}
+
+
+static QState offState(struct Alarm *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		me->armed = 0;
+		return Q_HANDLED();
+	case TICK_DECIMAL_SIGNAL:
+		return Q_HANDLED();
+	case ALARM_OFF_SIGNAL:
+		return Q_HANDLED();
+	case ALARM_ON_SIGNAL:
+		return Q_TRAN(onState);
+	}
+	return Q_SUPER(topState);
 }
 
 
@@ -190,4 +226,20 @@ static QState alarmedOffState(struct Alarm *me)
 		return Q_TRAN(alarmedOnState);
 	}
 	return Q_SUPER(alarmedState);
+}
+
+
+uint8_t get_alarm_state(struct Alarm *me)
+{
+	return me->armed;
+}
+
+
+void set_alarm_state(struct Alarm *me, uint8_t onoff)
+{
+	if (onoff) {
+		post((QActive*)me, ALARM_ON_SIGNAL, 0);
+	} else {
+		post((QActive*)me, ALARM_OFF_SIGNAL, 0);
+	}
 }

@@ -33,6 +33,7 @@ static QState dclockSetHoursState      (struct DClock *me);
 static QState dclockSetMinutesState    (struct DClock *me);
 static QState dclockSetSecondsState    (struct DClock *me);
 static QState dclockSetAlarmState      (struct DClock *me);
+static QState dclockSetAlarmOnOffState (struct DClock *me);
 
 
 static QEvent twiQueue[4];
@@ -175,7 +176,7 @@ static QState dclockState(struct DClock *me)
 		   short press, otherwise we would have transitioned out of
 		   this state via a long press. */
 		me->settingWhich = SETTING_ALARM;
-		return Q_TRAN(dclockSetHoursState);
+		return Q_TRAN(dclockSetAlarmOnOffState);
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 		me->settingWhich = SETTING_TIME;
 		return Q_TRAN(dclockSetHoursState);
@@ -230,15 +231,11 @@ static QState dclockTempBrightnessState(struct DClock *me)
 }
 
 
-static void displaySettingTime(struct DClock *me)
+static void displayWithTimeout(struct DClock *me, char *line)
 {
-	char line[17];
 	uint8_t i;
 	uint8_t dots;
 
-	snprintf(line, 17, "%02u.%02u.%02u        ", me->setTime[0],
-		 me->setTime[1], me->setTime[2]);
-	Q_ASSERT( strlen(line) == 16 );
 	i = 9;
 	dots = me->setTimeouts;
 	Q_ASSERT( dots <= 7 );
@@ -248,6 +245,41 @@ static void displaySettingTime(struct DClock *me)
 	Q_ASSERT( i <= 16 );
 	Q_ASSERT( line[16] == '\0' );
 	lcd_line2(line);
+}
+
+
+static void displaySettingTime(struct DClock *me)
+{
+	char line[17];
+
+	switch (me->settingWhich) {
+	case SETTING_TIME:
+		snprintf(line, 17, "%02u.%02u.%02u        ",
+			 me->setTime[0], me->setTime[1], me->setTime[2]);
+		break;
+	case SETTING_ALARM:
+		snprintf(line, 17, "%02u.%02u           ",
+			 me->setTime[0], me->setTime[1]);
+		break;
+	default:
+		Q_ASSERT( 0 );
+	}
+	Q_ASSERT( line[16] == '\0' );
+	displayWithTimeout(me, line);
+}
+
+
+static void displayAlarmOnOff(struct DClock *me)
+{
+	char line[17];
+
+	if (me->alarmOn) {
+		snprintf(line, 17, "On              ");
+	} else {
+		snprintf(line, 17, "Off             ");
+	}
+	Q_ASSERT( line[16] == '\0' );
+	displayWithTimeout(me, line);
 }
 
 
@@ -299,11 +331,9 @@ static QState dclockSetState(struct DClock *me)
 		   setting time, reset the timeouts, and re-display the name
 		   and dots. */
 		me->timeSetChanged = 73; /* Need a true value?  Why not 73? */
-		me->setTimeouts = N_TSET_TOUTS;
 		/* We don't change the signal that QP sends us on timeout,
 		   since the signal is specific to the child set state. */
 		QActive_arm_sig((QActive*)me, TSET_TOUT, 0);
-		displaySettingTime(me);
 		post(me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
@@ -355,11 +385,74 @@ static QState dclockSetTimeState(struct DClock *me)
 		get_dtimes(&timekeeper, me->setTime);
 		displaySettingTime(me);
 		return Q_HANDLED();
+	case UPDATE_TIME_SET_SIGNAL:
+		me->setTimeouts = N_TSET_TOUTS;
+		displaySettingTime(me);
+		return Q_SUPER(dclockSetState);
 	case Q_EXIT_SIG:
 		SERIALSTR("< dclockSetTimeState\r\n");
 		if (me->timeSetChanged) {
 			set_dtimes(&timekeeper, me->setTime);
 		}
+		return Q_HANDLED();
+	}
+	return Q_SUPER(dclockSetState);
+}
+
+
+static QState dclockSetAlarmOnOffState(struct DClock *me)
+{
+	static const char Q_ROM setAlarmOnOffName[] = "Alarm:";
+
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		Q_ASSERT( me->settingWhich == SETTING_ALARM );
+		QActive_arm_sig((QActive*)me, TSET_TOUT,
+				UPDATE_ALARM_TIMEOUT_SIGNAL);
+		me->setTimeouts = N_TSET_TOUTS;
+		me->alarmOn = get_alarm_state(&alarm);
+		displayMenuName(setAlarmOnOffName);
+		displayAlarmOnOff(me);
+		return Q_HANDLED();
+	case UPDATE_TIME_SET_SIGNAL:
+		me->setTimeouts = N_TSET_TOUTS;
+		displayAlarmOnOff(me);
+		return Q_SUPER(dclockSetState);
+	case UPDATE_ALARM_TIMEOUT_SIGNAL:
+		Q_ASSERT( me->setTimeouts );
+		me->setTimeouts --;
+		if (0 == me->setTimeouts) {
+			post(me, UPDATE_TIME_TIMEOUT_SIGNAL, 0);
+		} else {
+			displayAlarmOnOff(me);
+			QActive_arm_sig((QActive*)me, TSET_TOUT,
+					UPDATE_ALARM_TIMEOUT_SIGNAL);
+		}
+		return Q_HANDLED();
+	case BUTTON_UP_PRESS_SIGNAL:
+	case BUTTON_UP_REPEAT_SIGNAL:
+	case BUTTON_DOWN_PRESS_SIGNAL:
+	case BUTTON_DOWN_REPEAT_SIGNAL:
+		if (me->alarmOn) {
+			me->alarmOn = 0;
+		} else {
+			me->alarmOn = 73;
+		}
+		displayAlarmOnOff(me);
+		post(me, UPDATE_TIME_SET_SIGNAL, 0);
+		return Q_HANDLED();
+	case BUTTON_SELECT_PRESS_SIGNAL:
+		if (me->alarmOn) {
+			return Q_TRAN(dclockSetHoursState);
+		} else {
+			/* The user wants the alarm off.  If that's a new
+			   setting, then tell the alarm to go off. */
+			if (me->timeSetChanged) {
+				post(&alarm, ALARM_OFF_SIGNAL, 0);
+			}
+			return Q_TRAN(dclockSetState);
+		}
+	case BUTTON_SELECT_RELEASE_SIGNAL:
 		return Q_HANDLED();
 	}
 	return Q_SUPER(dclockSetState);
@@ -375,12 +468,24 @@ static QState dclockSetAlarmState(struct DClock *me)
 				 &(me->setTime[1]), &(me->setTime[2]));
 		displaySettingTime(me);
 		return Q_HANDLED();
+	case UPDATE_TIME_SET_SIGNAL:
+		me->setTimeouts = N_TSET_TOUTS;
+		displaySettingTime(me);
+		return Q_SUPER(dclockSetState);
 	case Q_EXIT_SIG:
-		SERIALSTR("< dclockSetAlarmState\r\n");
+		SERIALSTR("< dclockSetAlarmState ");
 		if (me->timeSetChanged) {
-			set_alarm_dtimes(&alarm, me->setTime[0],
-					 me->setTime[1], + me->setTime[2]);
+			if (me->alarmOn) {
+				SERIALSTR("on");
+				post(&alarm, ALARM_ON_SIGNAL, 0);
+				set_alarm_dtimes(&alarm, me->setTime[0],
+						 me->setTime[1], me->setTime[2]);
+			} else {
+				SERIALSTR("off");
+				post(&alarm, ALARM_OFF_SIGNAL, 0);
+			}
 		}
+		SERIALSTR("\r\n");
 		return Q_HANDLED();
 	}
 	return Q_SUPER(dclockSetState);
@@ -516,7 +621,17 @@ static QState dclockSetMinutesState(struct DClock *me)
 		lcd_set_cursor(1, 4);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
-		return Q_TRAN(dclockSetSecondsState);
+		switch (me->settingWhich) {
+		case SETTING_TIME:
+			return Q_TRAN(dclockSetSecondsState);
+		case SETTING_ALARM:
+			/* We don't set the seconds on the alarm, so don't
+			   transition to that state. */
+			return Q_TRAN(dclockSetState);
+		default:
+			Q_ASSERT( 0 );
+			break;
+		}
 	case BUTTON_SELECT_RELEASE_SIGNAL:
 		return Q_HANDLED();
 	}

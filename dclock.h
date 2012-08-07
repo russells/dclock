@@ -69,6 +69,7 @@ enum DClockSignals {
 	UPDATE_HOURS_TIMEOUT_SIGNAL,
 	UPDATE_MINUTES_TIMEOUT_SIGNAL,
 	UPDATE_SECONDS_TIMEOUT_SIGNAL,
+	UPDATE_ALARM_TIMEOUT_SIGNAL,
 
 	/**
 	 * The time has been changed, so set it and write to the RTC.
@@ -80,6 +81,9 @@ enum DClockSignals {
 	TWI_FINISHED_SIGNAL,
 	TWI_REPLY_0_SIGNAL,
 	TWI_REPLY_1_SIGNAL,
+
+	ALARM_ON_SIGNAL,
+	ALARM_OFF_SIGNAL,
 
 	MAX_PUB_SIG,
 	MAX_SIG,
@@ -110,6 +114,8 @@ struct DClock {
 	uint8_t ready;
 	/** Indicates whether we are setting the time or the alarm. */
 	uint8_t settingWhich;
+	/** A temporary holder for the alarm state. */
+	uint8_t alarmOn;
 };
 
 
