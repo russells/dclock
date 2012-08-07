@@ -464,8 +464,7 @@ static QState dclockSetAlarmState(struct DClock *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("> dclockSetAlarmState\r\n");
-		get_alarm_dtimes(&alarm, &(me->setTime[0]),
-				 &(me->setTime[1]), &(me->setTime[2]));
+		get_alarm_dtimes(&alarm, me->setTime);
 		displaySettingTime(me);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_SIGNAL:
@@ -478,8 +477,7 @@ static QState dclockSetAlarmState(struct DClock *me)
 			if (me->alarmOn) {
 				SERIALSTR("on");
 				post(&alarm, ALARM_ON_SIGNAL, 0);
-				set_alarm_dtimes(&alarm, me->setTime[0],
-						 me->setTime[1], me->setTime[2]);
+				set_alarm_dtimes(&alarm, me->setTime);
 			} else {
 				SERIALSTR("off");
 				post(&alarm, ALARM_OFF_SIGNAL, 0);

@@ -31,26 +31,28 @@ void set_alarm_dseconds(struct Alarm *me, uint32_t dseconds)
 }
 
 
-void get_alarm_dtimes(struct Alarm *me, uint8_t *ph, uint8_t *pm, uint8_t *ps)
+void get_alarm_dtimes(struct Alarm *me, uint8_t *dtimes)
 {
 	uint32_t sec = me->alarmTime;
 	Q_ASSERT( sec <= 99999 );
-	*ps = sec % 100;
+	dtimes[2] = 0;
 	sec /= 100;
-	*pm = sec % 100;
+	dtimes[1] = sec % 100;
 	sec /= 100;
-	*ph = sec % 10;
+	dtimes[0] = sec % 10;
 }
 
 
-void set_alarm_dtimes(struct Alarm *me, uint8_t h, uint8_t m, uint8_t s)
+void set_alarm_dtimes(struct Alarm *me, uint8_t *dtimes)
 {
 	/* These three values are all unsigned and can all be zero, so we don't
 	   need to check the lower bound. */
-	Q_ASSERT( h <= 9 );
-	Q_ASSERT( m <= 99 );
-	Q_ASSERT( s <= 99 );
-	set_alarm_dseconds(me, (h * 10000L) + (m * 100L) + s);
+	Q_ASSERT( dtimes[0] <= 9 );
+	Q_ASSERT( dtimes[1] <= 99 );
+	Q_ASSERT( dtimes[2] == 0 );
+	set_alarm_dseconds(me,
+			   (dtimes[0] * 10000L)
+			   + (dtimes[1] * 100L) + dtimes[2]);
 }
 
 
@@ -59,7 +61,7 @@ void alarm_ctor(void)
 	SERIALSTR("alarm_ctor()\r\n");
 	serial_drain();
 	QActive_ctor((QActive*)(&alarm), (QStateHandler)&initialState);
-	alarm.alarmTime = 11749;
+	alarm.alarmTime = 11700;
 	alarm.ready = 0;
 }
 

@@ -23,8 +23,8 @@ void alarm_ctor(void);
 
 uint32_t get_alarm_dseconds(struct Alarm *me);
 void set_alarm_dseconds(struct Alarm *me, uint32_t dseconds);
-void get_alarm_dtimes(struct Alarm *me, uint8_t *ph, uint8_t *pm, uint8_t *ps);
-void set_alarm_dtimes(struct Alarm *me, uint8_t h, uint8_t m, uint8_t s);
+void get_alarm_dtimes(struct Alarm *me, uint8_t *dtimes);
+void set_alarm_dtimes(struct Alarm *me, uint8_t *dtimes);
 
 uint8_t get_alarm_state(struct Alarm *me);
 void set_alarm_state(struct Alarm *me, uint8_t onoff);
