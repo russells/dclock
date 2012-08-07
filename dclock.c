@@ -13,6 +13,7 @@
 #include "twi.h"
 #include "twi-status.h"
 #include "timekeeper.h"
+#include "time-utils.h"
 #include "rtc.h"
 #include <string.h>
 #include <stdio.h>
@@ -235,8 +236,8 @@ static void displaySettingTime(struct DClock *me)
 	uint8_t i;
 	uint8_t dots;
 
-	snprintf(line, 17, "%02u.%02u.%02u        ", me->setHours,
-		 me->setMinutes, me->setSeconds);
+	snprintf(line, 17, "%02u.%02u.%02u        ", me->setTime[0],
+		 me->setTime[1], me->setTime[2]);
 	Q_ASSERT( strlen(line) == 16 );
 	i = 9;
 	dots = me->setTimeouts;
@@ -333,9 +334,9 @@ static QState dclockSetState(struct DClock *me)
 		QActive_disarm((QActive*)me);
 		/* These three values are all unsigned and can all be zero, so
 		   we don't need to check the lower bound. */
-		Q_ASSERT( me->setHours <= 9 );
-		Q_ASSERT( me->setMinutes <= 99 );
-		Q_ASSERT( me->setSeconds <= 99 );
+		Q_ASSERT( me->setTime[0] <= 9 );
+		Q_ASSERT( me->setTime[1] <= 99 );
+		Q_ASSERT( me->setTime[2] <= 99 );
 		LCD_LINE2_ROM("                ");
 		lcd_cursor_off();
 		lcd_clear();
@@ -348,32 +349,16 @@ static QState dclockSetState(struct DClock *me)
 
 static QState dclockSetTimeState(struct DClock *me)
 {
-	uint32_t sec;
-
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("> dclockSetTimeState\r\n");
-		sec = get_dseconds(&timekeeper);
-
-		me->setSeconds = sec % 100;
-		sec /= 100;
-		me->setMinutes = sec % 100;
-		sec /= 100;
-		me->setHours = sec % 10;
+		get_dtimes(&timekeeper, me->setTime);
 		displaySettingTime(me);
 		return Q_HANDLED();
 	case Q_EXIT_SIG:
 		SERIALSTR("< dclockSetTimeState\r\n");
-		/* These three values are all unsigned and can all be zero, so
-		   we don't need to check the lower bound. */
-		Q_ASSERT( me->setHours <= 9 );
-		Q_ASSERT( me->setMinutes <= 99 );
-		Q_ASSERT( me->setSeconds <= 99 );
 		if (me->timeSetChanged) {
-			set_dseconds(&timekeeper,
-				     (me->setHours * 10000L)
-				     + (me->setMinutes * 100L)
-				     + me->setSeconds);
+			set_dtimes(&timekeeper, me->setTime);
 		}
 		return Q_HANDLED();
 	}
@@ -383,32 +368,18 @@ static QState dclockSetTimeState(struct DClock *me)
 
 static QState dclockSetAlarmState(struct DClock *me)
 {
-	uint32_t sec;
-
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("> dclockSetAlarmState\r\n");
-		sec = get_alarm_dseconds(&alarm);
-
-		me->setSeconds = sec % 100;
-		sec /= 100;
-		me->setMinutes = sec % 100;
-		sec /= 100;
-		me->setHours = sec % 10;
+		get_alarm_dtimes(&alarm, &(me->setTime[0]),
+				 &(me->setTime[1]), &(me->setTime[2]));
 		displaySettingTime(me);
 		return Q_HANDLED();
 	case Q_EXIT_SIG:
 		SERIALSTR("< dclockSetAlarmState\r\n");
-		/* These three values are all unsigned and can all be zero, so
-		   we don't need to check the lower bound. */
-		Q_ASSERT( me->setHours <= 9 );
-		Q_ASSERT( me->setMinutes <= 99 );
-		Q_ASSERT( me->setSeconds <= 99 );
 		if (me->timeSetChanged) {
-			set_alarm_dseconds(&alarm,
-					   (me->setHours * 10000L)
-					   + (me->setMinutes * 100L)
-					   + me->setSeconds);
+			set_alarm_dtimes(&alarm, me->setTime[0],
+					 me->setTime[1], + me->setTime[2]);
 		}
 		return Q_HANDLED();
 	}
@@ -464,22 +435,12 @@ static QState dclockSetHoursState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
-		Q_ASSERT( me->setHours <= 9 );
-		if (9 == me->setHours) {
-			me->setHours = 0;
-		} else {
-			me->setHours++;
-		}
+		me->setTime[0] = inc_hours(me->setTime[0]);
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
-		Q_ASSERT( me->setHours <= 9 );
-		if (0 == me->setHours) {
-			me->setHours = 9;
-		} else {
-			me->setHours--;
-		}
+		me->setTime[0] = dec_hours(me->setTime[0]);
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
@@ -543,22 +504,12 @@ static QState dclockSetMinutesState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
-		Q_ASSERT( me->setMinutes <= 99 );
-		if (99 == me->setMinutes) {
-			me->setMinutes = 0;
-		} else {
-			me->setMinutes++;
-		}
+		me->setTime[1] = inc_minutes(me->setTime[1]);
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
-		Q_ASSERT( me->setMinutes <= 99 );
-		if (0 == me->setMinutes) {
-			me->setMinutes = 99;
-		} else {
-			me->setMinutes--;
-		}
+		me->setTime[1] = dec_minutes(me->setTime[1]);
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
@@ -622,22 +573,12 @@ static QState dclockSetSecondsState(struct DClock *me)
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
-		Q_ASSERT( me->setSeconds <= 99 );
-		if (99 == me->setSeconds) {
-			me->setSeconds = 0;
-		} else {
-			me->setSeconds++;
-		}
+		me->setTime[2] = inc_seconds(me->setTime[2]);
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
-		Q_ASSERT( me->setSeconds <= 99 );
-		if (0 == me->setSeconds) {
-			me->setSeconds = 99;
-		} else {
-			me->setSeconds--;
-		}
+		me->setTime[2] = dec_seconds(me->setTime[2]);
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:

@@ -1,4 +1,5 @@
 #include "alarm.h"
+#include "time-utils.h"
 #include "serial.h"
 #include "dclock.h"
 #include "lcd.h"
@@ -25,6 +26,29 @@ uint32_t get_alarm_dseconds(struct Alarm *me)
 void set_alarm_dseconds(struct Alarm *me, uint32_t dseconds)
 {
 	me->alarmTime = dseconds;
+}
+
+
+void get_alarm_dtimes(struct Alarm *me, uint8_t *ph, uint8_t *pm, uint8_t *ps)
+{
+	uint32_t sec = me->alarmTime;
+	Q_ASSERT( sec <= 99999 );
+	*ps = sec % 100;
+	sec /= 100;
+	*pm = sec % 100;
+	sec /= 100;
+	*ph = sec % 10;
+}
+
+
+void set_alarm_dtimes(struct Alarm *me, uint8_t h, uint8_t m, uint8_t s)
+{
+	/* These three values are all unsigned and can all be zero, so we don't
+	   need to check the lower bound. */
+	Q_ASSERT( h <= 9 );
+	Q_ASSERT( m <= 99 );
+	Q_ASSERT( s <= 99 );
+	set_alarm_dseconds(me, (h * 10000L) + (m * 100L) + s);
 }
 
 

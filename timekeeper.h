@@ -33,7 +33,8 @@ extern struct Timekeeper timekeeper;
 void timekeeper_ctor(void);
 
 uint32_t get_dseconds(struct Timekeeper *me);
+void get_dtimes(struct Timekeeper *me, uint8_t *dtimes);
 void set_dseconds(struct Timekeeper *me, uint32_t ds);
-uint32_t rtc_time_to_decimal_time(const uint8_t *bytes);
+void set_dtimes(struct Timekeeper *me, uint8_t *dtimes);
 
 #endif

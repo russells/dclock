@@ -101,12 +101,9 @@ struct DClock {
 	    setting states.  Later, will also indicate whether we update the
 	    time in the RTC when we exit those states.  */
 	uint8_t timeSetChanged;
-	/** The new hours set time used by the time setting states. */
-	uint8_t setHours;
-	/** The new minutes set time used by the time setting states. */
-	uint8_t setMinutes;
-	/** The new seconds set time used by the time setting states. */
-	uint8_t setSeconds;
+	/** The new time used by the time setting states.  Hours, minutes, and
+	    seconds. */
+	uint8_t setTime[3];
 	/** Count timeouts in the time setting states. */
 	uint8_t setTimeouts;
 	/** Set true when we are able to receive signals. */
