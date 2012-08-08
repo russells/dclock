@@ -12,11 +12,13 @@
 static QState initial              (struct TimeSetter *me);
 static QState top                  (struct TimeSetter *me);
 static QState tempBrightnessState  (struct TimeSetter *me);
+static QState setTimePauseState    (struct TimeSetter *me);
 static QState setTimeState         (struct TimeSetter *me);
 static QState setHoursState        (struct TimeSetter *me);
 static QState setMinutesState      (struct TimeSetter *me);
 static QState setSecondsState      (struct TimeSetter *me);
 static QState setAlarmState        (struct TimeSetter *me);
+static QState setAlarmPauseState   (struct TimeSetter *me);
 static QState setAlarmOnOffState   (struct TimeSetter *me);
 
 
@@ -62,10 +64,10 @@ static QState top(struct TimeSetter *me)
 		   short press, otherwise we would have transitioned out of
 		   this state via a long press. */
 		me->settingWhich = SETTING_ALARM;
-		return Q_TRAN(setAlarmOnOffState);
+		return Q_TRAN(setAlarmPauseState);
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 		me->settingWhich = SETTING_TIME;
-		return Q_TRAN(setHoursState);
+		return Q_TRAN(setTimePauseState);
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
 		lcd_inc_brightness();
@@ -262,6 +264,29 @@ static QState setState(struct TimeSetter *me)
 }
 
 
+/**
+ * This state is here so we can give the TimeDisplay a moment to stop updating.
+ *
+ * The problem is that when we send TimeDisplay a SETTING_TIME_SIGNAL, there
+ * could already be a tick signal in its queue.  So it may overwrite the top
+ * line of the display after we have written the top line with the menu name.
+ * But if we wait for one tick here, that gives time for TimeDisplay's queue to
+ * be processed, including the SETTING_TIME_SIGNAL.  So even if there is a tick
+ * event there, it will be processed before we update the top line.
+ */
+static QState setTimePauseState(struct TimeSetter *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		QActive_arm((QActive*)me, 1);
+		return Q_HANDLED();
+	case Q_TIMEOUT_SIG:
+		return Q_TRAN(setHoursState);
+	}
+	return Q_SUPER(setState);
+}
+
+
 static QState setTimeState(struct TimeSetter *me)
 {
 	switch (Q_SIG(me)) {
@@ -280,6 +305,22 @@ static QState setTimeState(struct TimeSetter *me)
 			set_dtimes(&timekeeper, me->setTime);
 		}
 		return Q_HANDLED();
+	}
+	return Q_SUPER(setState);
+}
+
+
+/**
+ * @see setTimePauseState()
+ */
+static QState setAlarmPauseState(struct TimeSetter *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		QActive_arm((QActive*)me, 1);
+		return Q_HANDLED();
+	case Q_TIMEOUT_SIG:
+		return Q_TRAN(setAlarmOnOffState);
 	}
 	return Q_SUPER(setState);
 }
