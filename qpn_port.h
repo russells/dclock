@@ -39,9 +39,9 @@
 #define QF_TIMEEVT_CTR_SIZE     2 /* 16 bit time counter. */
 
 /* maximum # active objects--must match EXACTLY the QF_active[] definition  */
-#define QF_MAX_ACTIVE           5 /* The decimal clock has these active
-				     objects: dclock, buttons, alarm, twi,
-				     timekeeper. */
+#define QF_MAX_ACTIVE           6 /* The decimal clock has these active
+				     objects: buttons, alarm, twi, timekeeper,
+				     timedisplay, timesetter. */
 
                                /* interrupt locking policy for IAR compiler */
 #define QF_INT_LOCK()           cli()

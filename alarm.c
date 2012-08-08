@@ -1,6 +1,7 @@
 #include "alarm.h"
 #include "time-utils.h"
 #include "serial.h"
+#include "timesetter.h"
 #include "dclock.h"
 #include "lcd.h"
 
@@ -96,7 +97,7 @@ static QState topState(struct Alarm *me)
 	case BUTTON_DOWN_LONG_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
 	case BUTTON_DOWN_RELEASE_SIGNAL:
-		post(&dclock, Q_SIG(me), 0);
+		post(&timesetter, Q_SIG(me), 0);
 		return Q_HANDLED();
 	}
 	return Q_SUPER(&QHsm_top);

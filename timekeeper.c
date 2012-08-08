@@ -16,6 +16,7 @@
 #include "serial.h"
 #include "alarm.h"
 #include "bsp.h"
+#include "timedisplay.h"
 #include <stdio.h>
 
 
@@ -131,7 +132,7 @@ static QState tkState(struct Timekeeper *me)
 	case TICK_DECIMAL_SIGNAL:
 		inc_dseconds(me);
 		post_r((&alarm), TICK_DECIMAL_SIGNAL, me->dseconds);
-		post_r((&dclock), TICK_DECIMAL_SIGNAL, me->dseconds);
+		post_r((&timedisplay), TICK_DECIMAL_SIGNAL, me->dseconds);
 		return Q_HANDLED();
 
 	case SET_TIME_SIGNAL:

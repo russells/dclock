@@ -1,6 +1,7 @@
 #include "bsp.h"
 #include "dclock.h"
 #include "timekeeper.h"
+#include "timedisplay.h"
 #include "buttons.h"
 #include "serial.h"
 #include "toggle-pin.h"
@@ -74,7 +75,7 @@ SIGNAL(WDT_vect)
 	/* There's no point calling postISR_r() instead of postISR() here.  If
 	   we don't send this signal we're hosed by the next WDT timeout
 	   anyway. */
-	postISR(&dclock, WATCHDOG_SIGNAL, 0);
+	postISR(&timekeeper, WATCHDOG_SIGNAL, 0);
 }
 
 

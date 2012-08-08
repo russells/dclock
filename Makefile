@@ -55,6 +55,7 @@ LINKFLAGS = -gdwarf-2 -Os -mmcu=$(TARGET_MCU)
 
 SRCS = dclock.c buttons.c alarm.c lcd.c serial.c bsp-avr.c \
 	timekeeper.c time-utils.c \
+	timedisplay.c timesetter.c \
 	twi.c twi-status.c \
 	qp-nano/source/qepn.c qp-nano/source/qfn.c
 

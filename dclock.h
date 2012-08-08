@@ -51,6 +51,14 @@ enum DClockSignals {
 	 */
 	TICK_DECIMAL_SIGNAL,
 	/**
+	 * A notification that we're setting the time or alarm.
+	 */
+	SETTING_TIME_SIGNAL,
+	/**
+	 * A notification that we've finished setting the time or alarm.
+	 */
+	SETTING_TIME_FINISHED_SIGNAL,
+	/**
 	 * Sent when the user is setting the time and the time is changed.
 	 */
 	UPDATE_TIME_SET_SIGNAL,
@@ -88,42 +96,6 @@ enum DClockSignals {
 	MAX_PUB_SIG,
 	MAX_SIG,
 };
-
-
-/**
- * Create the decimal clock.
- */
-void dclock_ctor(void);
-
-/**
- */
-struct DClock {
-	QActive super;
-	/** Set false when we enter the time setting states, true when we
-	    change the time in the time setting states.  Used to decide whether
-	    or not to set the current time after we've finished in the time
-	    setting states.  Later, will also indicate whether we update the
-	    time in the RTC when we exit those states.  */
-	uint8_t timeSetChanged;
-	/** The new time used by the time setting states.  Hours, minutes, and
-	    seconds. */
-	uint8_t setTime[3];
-	/** Count timeouts in the time setting states. */
-	uint8_t setTimeouts;
-	/** Set true when we are able to receive signals. */
-	uint8_t ready;
-	/** Indicates whether we are setting the time or the alarm. */
-	uint8_t settingWhich;
-	/** A temporary holder for the alarm state. */
-	uint8_t alarmOn;
-};
-
-
-#define SETTING_ALARM 'A'
-#define SETTING_TIME 'T'
-
-
-struct DClock dclock;
 
 
 /**

@@ -2,7 +2,6 @@
 #include "alarm.h"
 #include "serial.h"
 #include "bsp.h"
-#include "dclock.h"
 
 /**
  * @file Handle button presses, and send them to other active objects.
