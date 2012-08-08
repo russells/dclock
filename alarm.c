@@ -191,7 +191,7 @@ static QState alarmedState(struct Alarm *me)
 	case Q_TIMEOUT_SIG:
 		return Q_TRAN(topState);
 	case BUTTON_SELECT_RELEASE_SIGNAL:
-		return Q_TRAN(topState);
+		return Q_TRAN(offState);
 	case Q_EXIT_SIG:
 		SERIALSTR("Alarm stopped\r\n");
 		LCD_LINE2_ROM("                ");
