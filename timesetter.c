@@ -1,7 +1,7 @@
 #include "timesetter.h"
 #include "timedisplay.h"
 #include "timekeeper.h"
-#include "time-utils.h"
+#include "time.h"
 #include "lcd.h"
 #include "dclock.h"
 #include "alarm.h"
@@ -139,15 +139,29 @@ static void displayWithTimeout(struct TimeSetter *me, char *line)
 static void displaySettingTime(struct TimeSetter *me)
 {
 	char line[17];
+	char separator;
+
+	switch (get_time_mode()) {
+	case NORMAL_MODE:
+		separator = ':';
+		break;
+	case DECIMAL_MODE:
+		separator = '.';
+		break;
+	default:
+		separator = 0;
+		Q_ASSERT( 0 );
+	}
 
 	switch (me->settingWhich) {
 	case SETTING_TIME:
-		snprintf(line, 17, "%02u.%02u.%02u        ",
-			 me->setTime[0], me->setTime[1], me->setTime[2]);
+		snprintf(line, 17, "%02u%c%02u%c%02u        ",
+			 me->setTime[0], separator, me->setTime[1], separator,
+			 me->setTime[2]);
 		break;
 	case SETTING_ALARM:
-		snprintf(line, 17, "%02u.%02u           ",
-			 me->setTime[0], me->setTime[1]);
+		snprintf(line, 17, "%02u%c%02u           ",
+			 me->setTime[0], separator, me->setTime[1]);
 		break;
 	default:
 		Q_ASSERT( 0 );
@@ -249,15 +263,9 @@ static QState setState(struct TimeSetter *me)
 	case Q_EXIT_SIG:
 		post((&timedisplay), SETTING_TIME_FINISHED_SIGNAL, 0);
 		QActive_disarm((QActive*)me);
-		/* These three values are all unsigned and can all be zero, so
-		   we don't need to check the lower bound. */
-		Q_ASSERT( me->setTime[0] <= 9 );
-		Q_ASSERT( me->setTime[1] <= 99 );
-		Q_ASSERT( me->setTime[2] <= 99 );
 		LCD_LINE2_ROM("                ");
 		lcd_cursor_off();
 		lcd_clear();
-		//displayTime(me, get_dseconds(&timekeeper));
 		return Q_HANDLED();
 	}
 	return Q_SUPER(top);
@@ -292,7 +300,7 @@ static QState setTimeState(struct TimeSetter *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("> setTimeState\r\n");
-		get_dtimes(&timekeeper, me->setTime);
+		get_times(me->setTime);
 		displaySettingTime(me);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_SIGNAL:
@@ -300,9 +308,12 @@ static QState setTimeState(struct TimeSetter *me)
 		displaySettingTime(me);
 		return Q_SUPER(setState);
 	case Q_EXIT_SIG:
-		SERIALSTR("< setTimeState\r\n");
+		SERIALSTR("< setTimeState");
 		if (me->timeSetChanged) {
-			set_dtimes(&timekeeper, me->setTime);
+			SERIALSTR(" changed\r\n");
+			set_times(me->setTime);
+		} else {
+			SERIALSTR(" no change\r\n");
 		}
 		return Q_HANDLED();
 	}
@@ -390,7 +401,7 @@ static QState setAlarmState(struct TimeSetter *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("> setAlarmState\r\n");
-		get_alarm_dtimes(&alarm, me->setTime);
+		get_alarm_times(&alarm, me->setTime);
 		displaySettingTime(me);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_SIGNAL:
@@ -401,15 +412,20 @@ static QState setAlarmState(struct TimeSetter *me)
 		SERIALSTR("< setAlarmState ");
 		if (me->timeSetChanged) {
 			if (me->alarmOn) {
-				SERIALSTR("on");
+				SERIALSTR("on\r\n");
 				post(&alarm, ALARM_ON_SIGNAL, 0);
-				set_alarm_dtimes(&alarm, me->setTime);
+				set_alarm_times(&alarm, me->setTime);
 			} else {
-				SERIALSTR("off");
+				SERIALSTR("off\r\n");
 				post(&alarm, ALARM_OFF_SIGNAL, 0);
 			}
+		} else {
+			if (me->alarmOn) {
+				SERIALSTR("no change, on\r\n");
+			} else {
+				SERIALSTR("no change, off\r\n");
+			}
 		}
-		SERIALSTR("\r\n");
 		return Q_HANDLED();
 	}
 	return Q_SUPER(setState);

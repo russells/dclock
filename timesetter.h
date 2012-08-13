@@ -5,7 +5,7 @@
 
 
 /**
- * Create the decimal clock.
+ * Create the time setter.
  */
 void timesetter_ctor(void);
 
@@ -20,7 +20,8 @@ struct TimeSetter {
 	    time in the RTC when we exit those states.  */
 	uint8_t timeSetChanged;
 	/** The new time used by the time setting states.  Hours, minutes, and
-	    seconds. */
+	    seconds.  These values are incremented and decremented separately
+	    by code that is aware of the current mode. */
 	uint8_t setTime[3];
 	/** Count timeouts in the time setting states. */
 	uint8_t setTimeouts;

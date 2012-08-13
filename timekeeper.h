@@ -3,10 +3,20 @@
 
 #include "qpn_port.h"
 #include "twi.h"
+#include "time.h"
+
 
 struct Timekeeper {
 	QActive super;
-	uint32_t dseconds;
+
+	/** The decimal time, as one number. */
+	uint32_t decimaltime;
+
+	/** The normal time, as hours, minutes, and seconds. */
+	struct NormalTime normaltime;
+
+	/** Decimal or normal mode. */
+	uint8_t mode;
 
 	/** Holder for the first TWI request. */
 	struct TWIRequest twiRequest0;
@@ -14,7 +24,7 @@ struct Timekeeper {
 
 	/** Holder for the second TWI request. */
 	struct TWIRequest twiRequest1;
-	uint8_t twiBuffer1[12];
+	uint8_t twiBuffer1[20];
 
 	/** This contains the addresses of one or both of the TWIRequests
 	    above.  When we do consecutive TWI operations (which means keeping
@@ -32,9 +42,9 @@ extern struct Timekeeper timekeeper;
 
 void timekeeper_ctor(void);
 
-uint32_t get_dseconds(struct Timekeeper *me);
-void get_dtimes(struct Timekeeper *me, uint8_t *dtimes);
-void set_dseconds(struct Timekeeper *me, uint32_t ds);
-void set_dtimes(struct Timekeeper *me, uint8_t *dtimes);
+uint32_t get_decimal_time(void);
+struct NormalTime get_normal_time(void);
+void get_times(uint8_t *dtimes);
+void set_times(uint8_t *dtimes);
 
 #endif

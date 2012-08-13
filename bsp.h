@@ -46,6 +46,8 @@ void BSP_lcd_pwm(uint8_t pwm);
 void BSP_lcd_pwm_on(void);
 void BSP_lcd_pwm_off(void);
 
+void BSP_enable_rtc_interrupt(void);
+
 void BSP_watchdog(void);
 
 

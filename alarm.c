@@ -1,9 +1,11 @@
 #include "alarm.h"
-#include "time-utils.h"
+#include "time.h"
 #include "serial.h"
 #include "timesetter.h"
 #include "dclock.h"
 #include "lcd.h"
+
+#include <stdio.h>
 
 Q_DEFINE_THIS_FILE;
 
@@ -13,6 +15,8 @@ struct Alarm alarm;
 static QState initialState(struct Alarm *me);
 static QState topState(struct Alarm *me);
 static QState onState(struct Alarm *me);
+static QState onDecimalState(struct Alarm *me);
+static QState onNormalState(struct Alarm *me);
 static QState offState(struct Alarm *me);
 static QState ignoreButtonsState(struct Alarm *me);
 static QState alarmedState(struct Alarm *me);
@@ -20,40 +24,70 @@ static QState alarmedOnState(struct Alarm *me);
 static QState alarmedOffState(struct Alarm *me);
 
 
-uint32_t get_alarm_dseconds(struct Alarm *me)
+void get_alarm_times(struct Alarm *me, uint8_t *times)
 {
-	return me->alarmTime;
+	uint32_t sec;
+
+	switch (get_time_mode()) {
+	case DECIMAL_MODE:
+		sec = me->decimalAlarmTime;
+		Q_ASSERT( sec <= 99999 );
+		times[2] = 0;	/* Force seconds to 0. */
+		sec /= 100;
+		times[1] = sec % 100;
+		sec /= 100;
+		times[0] = sec % 10;
+		break;
+	case NORMAL_MODE:
+		Q_ASSERT( me->normalAlarmTime.h <= 23 );
+		Q_ASSERT( me->normalAlarmTime.m <= 59 );
+		Q_ASSERT( me->normalAlarmTime.s <= 59 );
+		times[0] = me->normalAlarmTime.h;
+		times[1] = me->normalAlarmTime.m;
+		times[2] = 0;	/* Force seconds to 0. */
+		break;
+	default:
+		Q_ASSERT( 0 );
+	}
 }
 
 
-void set_alarm_dseconds(struct Alarm *me, uint32_t dseconds)
+void set_alarm_times(struct Alarm *me, uint8_t *times)
 {
-	me->alarmTime = dseconds;
-}
-
-
-void get_alarm_dtimes(struct Alarm *me, uint8_t *dtimes)
-{
-	uint32_t sec = me->alarmTime;
-	Q_ASSERT( sec <= 99999 );
-	dtimes[2] = 0;
-	sec /= 100;
-	dtimes[1] = sec % 100;
-	sec /= 100;
-	dtimes[0] = sec % 10;
-}
-
-
-void set_alarm_dtimes(struct Alarm *me, uint8_t *dtimes)
-{
-	/* These three values are all unsigned and can all be zero, so we don't
-	   need to check the lower bound. */
-	Q_ASSERT( dtimes[0] <= 9 );
-	Q_ASSERT( dtimes[1] <= 99 );
-	Q_ASSERT( dtimes[2] == 0 );
-	set_alarm_dseconds(me,
-			   (dtimes[0] * 10000L)
-			   + (dtimes[1] * 100L) + dtimes[2]);
+	switch (get_time_mode()) {
+	case DECIMAL_MODE:
+		/* These three values are all unsigned and can all be zero, so
+		   we don't need to check the lower bound. */
+		Q_ASSERT( times[0] <= 9 );
+		Q_ASSERT( times[1] <= 99 );
+		Q_ASSERT( times[2] == 0 );
+		me->decimalAlarmTime = (times[0] * 10000L)
+			+ (times[1] * 100L) + times[2];
+		me->normalAlarmTime = decimal_to_normal(me->decimalAlarmTime);
+		SERIALSTR("alarm time: ");
+		print_decimal_time(me->decimalAlarmTime);
+		SERIALSTR(" (");
+		print_normal_time(me->normalAlarmTime);
+		SERIALSTR(")\r\n");
+		break;
+	case NORMAL_MODE:
+		Q_ASSERT( times[0] <= 23 );
+		Q_ASSERT( times[1] <= 59 );
+		Q_ASSERT( times[2] == 0 );
+		me->normalAlarmTime.h = times[0];
+		me->normalAlarmTime.m = times[1];
+		me->normalAlarmTime.s = times[2];
+		me->normalAlarmTime.pad = 0;
+		me->decimalAlarmTime = normal_to_decimal(me->normalAlarmTime);
+		SERIALSTR("alarm time: ");
+		print_normal_time(me->normalAlarmTime);
+		SERIALSTR(" (");
+		print_decimal_time(me->decimalAlarmTime);
+		SERIALSTR(")\r\n");
+		break;
+	default:
+		Q_ASSERT( 0 );
+	}
 }
 
 
@@ -62,8 +96,13 @@ void alarm_ctor(void)
 	SERIALSTR("alarm_ctor()\r\n");
 	serial_drain();
 	QActive_ctor((QActive*)(&alarm), (QStateHandler)&initialState);
-	alarm.alarmTime = 11700;
+	alarm.decimalAlarmTime = 50000;
+	alarm.normalAlarmTime.h =  12;
+	alarm.normalAlarmTime.m = 0;
+	alarm.normalAlarmTime.s = 0;
+	alarm.normalAlarmTime.pad = 0;
 	alarm.ready = 0;
+	alarm.armed = 0;
 }
 
 
@@ -71,7 +110,7 @@ static QState initialState(struct Alarm *me)
 {
 	SERIALSTR("alarm initialState()\r\n");
 	serial_drain();
-	return Q_TRAN(onState);
+	return Q_TRAN(offState);
 }
 
 
@@ -79,12 +118,33 @@ static QState topState(struct Alarm *me)
 {
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		SERIALSTR("alarm topState Q_ENTRY\r\n");
-		serial_drain();
+		SERIALSTR("> alarm topState\r\n");
 		me->ready = 73;
 		return Q_HANDLED();
 	case ALARM_OFF_SIGNAL:
+		SERIALSTR("alarm ALARM_OFF_SIGNAL\r\n");
 		return Q_TRAN(offState);
+	case ALARM_ON_SIGNAL:
+		SERIALSTR("alarm ALARM_ON_SIGNAL\r\n");
+		switch (get_time_mode()) {
+		case NORMAL_MODE:
+			return Q_TRAN(onNormalState);
+		case DECIMAL_MODE:
+			return Q_TRAN(onDecimalState);
+		default:
+			Q_ASSERT( 0 );
+			return Q_HANDLED();
+		}
+	case NORMAL_MODE_SIGNAL:
+		if (me->armed) {
+			return Q_TRAN(onNormalState);
+		}
+		return Q_HANDLED();
+	case DECIMAL_MODE_SIGNAL:
+		if (me->armed) {
+			return Q_TRAN(onDecimalState);
+		}
+		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 	case BUTTON_SELECT_REPEAT_SIGNAL:
@@ -106,25 +166,57 @@ static QState topState(struct Alarm *me)
 
 static QState onState(struct Alarm *me)
 {
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		SERIALSTR("> alarm onState\r\n");
+		me->armed = 73;
+		return Q_HANDLED();
+	case ALARM_ON_SIGNAL:
+		return Q_HANDLED();
+	}
+	return Q_SUPER(topState);
+}
+
+
+static QState onDecimalState(struct Alarm *me)
+{
 	uint32_t thetime;
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		me->armed = 73;
-		return Q_HANDLED();
-	case ALARM_OFF_SIGNAL:
-		return Q_TRAN(offState);
-	case ALARM_ON_SIGNAL:
+		SERIALSTR("> alarm onDecimalState\r\n");
 		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:
 		thetime = Q_PAR(me);
-		if (thetime == me->alarmTime) {
+		if (thetime == me->decimalAlarmTime) {
 			return Q_TRAN(alarmedOnState);
 		} else {
 			return Q_HANDLED();
 		}
 	}
-	return Q_SUPER(topState);
+	return Q_SUPER(onState);
+}
+
+
+static QState onNormalState(struct Alarm *me)
+{
+	struct NormalTime *thetimep;
+
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		SERIALSTR("> alarm onNormalState\r\n");
+		return Q_HANDLED();
+	case TICK_NORMAL_SIGNAL:
+		thetimep = it2ntp(Q_PAR(me));
+		if (thetimep->s == me->normalAlarmTime.s
+		    && thetimep->m == me->normalAlarmTime.m
+		    && thetimep->h == me->normalAlarmTime.h) {
+			return Q_TRAN(alarmedOnState);
+		} else {
+			return Q_HANDLED();
+		}
+	}
+	return Q_SUPER(onState);
 }
 
 
@@ -138,8 +230,6 @@ static QState offState(struct Alarm *me)
 		return Q_HANDLED();
 	case ALARM_OFF_SIGNAL:
 		return Q_HANDLED();
-	case ALARM_ON_SIGNAL:
-		return Q_TRAN(onState);
 	}
 	return Q_SUPER(topState);
 }

@@ -9,7 +9,7 @@
  */
 
 #include "timekeeper.h"
-#include "time-utils.h"
+#include "time.h"
 #include "twi.h"
 #include "twi-status.h"
 #include "rtc.h"
@@ -27,57 +27,76 @@ struct Timekeeper timekeeper;
 
 
 static QState tkInitial                (struct Timekeeper *me);
-static QState tkState                  (struct Timekeeper *me);
+static QState topState                 (struct Timekeeper *me);
+static QState startupState             (struct Timekeeper *me);
+static QState readRTCState             (struct Timekeeper *me);
+static QState setupRTCState            (struct Timekeeper *me);
+static QState runningState             (struct Timekeeper *me);
 static QState tkSetTimeState           (struct Timekeeper *me);
 
+static void inc_decimaltime(struct Timekeeper *me);
+static void inc_normaltime(struct Timekeeper *me);
+static void rtc_to_normal(uint8_t *bytes, struct NormalTime *normaltime);
+static void normal_to_rtc(struct NormalTime *normaltime, uint8_t *bytes);
+static uint8_t checkRTCdata(uint8_t *bytes);
+static void setupRTCdata(uint8_t *bytes);
 static void start_rtc_twi_read(struct Timekeeper *me,
-			       uint8_t reg, uint8_t nbytes, uint8_t rw);
+			       uint8_t reg, uint8_t nbytes);
+static void default_times(struct Timekeeper *me);
 
 void timekeeper_ctor(void)
 {
 	QActive_ctor((QActive*)(&timekeeper), (QStateHandler)(&tkInitial));
-	timekeeper.dseconds = 11745;
+	timekeeper.decimaltime = 50000;
+	timekeeper.normaltime = *it2ntp(timekeeper.decimaltime);
 	timekeeper.ready = 73;
+	timekeeper.mode = DECIMAL_MODE; /* FIXME... */
 }
 
 
 static QState tkInitial(struct Timekeeper *me)
 {
-	return Q_TRAN(&tkState);
+	return Q_TRAN(&startupState);
 }
 
 
-static void inc_dseconds(struct Timekeeper *me)
+static QState topState(struct Timekeeper *me)
 {
-	/* There is no need to disable interrupts while we access or update
-	   dseconds, even though it's a four byte variable, as we never touch
-	   it during an interrupt handler. */
-
-	if (me->dseconds > 99999) {
-		SERIALSTR("me->dseconds == ");
-		char ds[12];
-		snprintf(ds, 12, "%lu", me->dseconds);
-		serial_send(ds);
-		SERIALSTR("\r\n");
+	switch (Q_SIG(me)) {
+	case WATCHDOG_SIGNAL:
+		BSP_watchdog();
+		return Q_HANDLED();
+	case NORMAL_MODE_SIGNAL:
+		me->mode = NORMAL_MODE;
+		return Q_HANDLED();
+	case DECIMAL_MODE_SIGNAL:
+		me->mode = DECIMAL_MODE;
+		return Q_HANDLED();
 	}
-	Q_ASSERT( me->dseconds <= 99999 );
-	if (99999 == me->dseconds) {
-		me->dseconds = 0;
-	} else {
-		me->dseconds++;
-	}
+	return Q_SUPER(QHsm_top);
 }
 
 
-static QState tkState(struct Timekeeper *me)
+static QState startupState(struct Timekeeper *me)
 {
-	uint8_t d32counter;
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		QActive_arm((QActive*)me, 1);
+		return Q_HANDLED();
+	case Q_TIMEOUT_SIG:
+		return Q_TRAN(readRTCState);
+	}
+	return Q_SUPER(topState);
+}
 
-	switch(Q_SIG(me)) {
+
+static QState readRTCState(struct Timekeeper *me)
+{
+	switch (Q_SIG(me)) {
 
 	case Q_ENTRY_SIG:
-		start_rtc_twi_read(me, 0, 3, 1); /* Start from register 0, 3
-						    bytes, read */
+		start_rtc_twi_read(me, 0, 19); /* Start from register 0, 19
+						  bytes */
 		return Q_HANDLED();
 
 	case TWI_REPLY_0_SIGNAL:
@@ -89,8 +108,12 @@ static QState tkState(struct Timekeeper *me)
 		SERIALSTR(" &request=");
 		serial_send_hex_int((uint16_t)(&me->twiRequest0));
 		SERIALSTR("\r\n");
-		serial_drain();
-		return Q_HANDLED();
+		if (0xf8 == me->twiRequest0.status) {
+			return Q_HANDLED();
+		} else {
+			default_times(me);
+			return Q_TRAN(setupRTCState);
+		}
 
 	case TWI_REPLY_1_SIGNAL:
 		SERIALSTR("TWI_REPLY_1_SIGNAL: ");
@@ -109,7 +132,69 @@ static QState tkState(struct Timekeeper *me)
 		serial_send_hex_int(me->twiBuffer1[2]);
 		SERIALSTR("\r\n");
 		serial_drain();
-		me->dseconds = rtc_time_to_decimal_time(me->twiBuffer1);
+		if (0xf8 == me->twiRequest1.status
+		    && 0 == checkRTCdata(me->twiRequest1.bytes)) {
+			rtc_to_normal(me->twiBuffer1, &me->normaltime);
+			me->decimaltime = normal_to_decimal(me->normaltime);
+			return Q_TRAN(runningState);
+		} else {
+			return Q_TRAN(setupRTCState);
+		}
+	}
+	return Q_SUPER(topState);
+}
+
+
+static QState setupRTCState(struct Timekeeper *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		me->twiBuffer1[0] = 0; /* Register 0 */
+		setupRTCdata(me->twiBuffer1+1);
+
+		me->twiRequest1.qactive = (QActive*)me;
+		me->twiRequest1.signal = TWI_REPLY_1_SIGNAL;
+		me->twiRequest1.bytes = me->twiBuffer1;
+		me->twiRequest1.nbytes = 16;
+		me->twiRequest1.address = RTC_ADDR << 1; /* |0 for write. */
+		me->twiRequest1.count = 0;
+		me->twiRequest1.status = 0;
+		me->twiRequestAddresses[0] = &(me->twiRequest1);
+		me->twiRequestAddresses[1] = 0;
+
+		SERIALSTR("setupRTCState, bytes=");
+		for (uint8_t i=0; i<16; i++) {
+			SERIALSTR(" ");
+			serial_send_hex_int(me->twiBuffer1[i]);
+		}
+		SERIALSTR("\r\n");
+
+		post(&twi, TWI_REQUEST_SIGNAL,
+		     (QParam)((uint16_t)(&(me->twiRequestAddresses))));
+		return Q_HANDLED();
+	case TWI_REPLY_1_SIGNAL:
+		me->decimaltime = 50000;
+		me->normaltime.h = 12;
+		me->normaltime.m = 0;
+		me->normaltime.s = 0;
+		me->normaltime.pad = 0;
+		SERIALSTR("setupRTCState > runningState\r\n");
+		return Q_TRAN(runningState);
+	}
+	return Q_SUPER(topState);
+}
+
+
+static QState runningState(struct Timekeeper *me)
+{
+	uint8_t d32counter;
+
+	switch (Q_SIG(me)) {
+
+	case Q_ENTRY_SIG:
+		SERIALSTR("runningState\r\n");
+		set_time_mode(NORMAL_MODE);
+		BSP_enable_rtc_interrupt();
 		return Q_HANDLED();
 
 	case TICK_DECIMAL_32_SIGNAL:
@@ -130,20 +215,28 @@ static QState tkState(struct Timekeeper *me)
 		return Q_HANDLED();
 
 	case TICK_DECIMAL_SIGNAL:
-		inc_dseconds(me);
-		post_r((&alarm), TICK_DECIMAL_SIGNAL, me->dseconds);
-		post_r((&timedisplay), TICK_DECIMAL_SIGNAL, me->dseconds);
+		inc_decimaltime(me);
+		post_r((&alarm), TICK_DECIMAL_SIGNAL, me->decimaltime);
+		post_r((&timedisplay), TICK_DECIMAL_SIGNAL, me->decimaltime);
 		return Q_HANDLED();
 
-	case SET_TIME_SIGNAL:
-		me->dseconds = (uint32_t)(Q_PAR(me));
+	case TICK_NORMAL_SIGNAL:
+		inc_normaltime(me);
+		post((&alarm), TICK_NORMAL_SIGNAL, nt2it(me->normaltime));
+		post((&timedisplay), TICK_NORMAL_SIGNAL, nt2it(me->normaltime));
+		return Q_HANDLED();
+
+	case SET_DECIMAL_TIME_SIGNAL:
+		me->decimaltime = (uint32_t)(Q_PAR(me));
+		me->normaltime = decimal_to_normal(me->decimaltime);
 		return Q_TRAN(tkSetTimeState);
 
-	case WATCHDOG_SIGNAL:
-		BSP_watchdog();
-		return Q_HANDLED();
+	case SET_NORMAL_TIME_SIGNAL:
+		me->normaltime = it2nt(Q_PAR(me));
+		me->decimaltime = normal_to_decimal(me->normaltime);
+		return Q_TRAN(tkSetTimeState);
 	}
-	return Q_SUPER(QHsm_top);
+	return Q_SUPER(topState);
 }
 
 
@@ -159,7 +252,7 @@ tkSetTimeState(struct Timekeeper *me)
 
 		/* Set up a TWI buffer to write the time. */
 		me->twiBuffer0[0] = 0x00; /* Register address. */
-		decimal_time_to_rtc_time(me->dseconds, me->twiBuffer0 + 1);
+		normal_to_rtc(&(me->normaltime), me->twiBuffer0 + 1);
 		me->twiBuffer0[4] = 0x01; /* Day */
 		me->twiBuffer0[5] = 0x01; /* Date */
 		me->twiBuffer0[6] = 0x01; /* Month/Century */
@@ -190,45 +283,190 @@ tkSetTimeState(struct Timekeeper *me)
 		switch (status) {
 		case 0xf8:
 			SERIALSTR("tkSetTimeState: TWI_REPLY_0_SIGNAL\r\n");
-			/* The first part was successful, so we do nothing and
-			   wait for the second part to complete. */
 			return Q_HANDLED();
 		default:
 			SERIALSTR("tkSetTimeState: TWI_REPLY_0_SIGNAL: ");
 			serial_send_rom(twi_status_string(status));
 			SERIALSTR("\r\n");
-			return Q_TRAN(tkState);
+			return Q_TRAN(runningState);
 		}
 
 	case Q_EXIT_SIG:
 		SERIALSTR("tkSetTimeState exits\r\n");
 		return Q_HANDLED();
 	}
-	return Q_SUPER(tkState);
+	return Q_SUPER(runningState);
+}
+
+
+/**
+ * Returns 0 for ok, non-zero for something wrong.
+ */
+static uint8_t checkRTCdata(uint8_t *bytes)
+{
+	uint8_t e = 1;
+	// seconds
+	if ((bytes[0] & 0x0f) > 9   ) goto ret; else e++;
+	if ((bytes[0] & 0x70) > 0x50) goto ret; else e++;
+	// minutes
+	if ((bytes[1] & 0x0f) > 9   ) goto ret; else e++;
+	if ((bytes[1] & 0x70) > 0x50) goto ret; else e++;
+	// hours
+	if ((bytes[2] & 0x0f) > 9   ) goto ret; else e++;
+	if ( bytes[2] & 0x40)         goto ret; else e++;
+	if ((bytes[2] & 0x30) > 0x20) goto ret; else e++;
+
+	// EOSC /BBSQW /CONF /RS2 /RS1 /INTCN /A2IE /A1IE
+	if (bytes[14] != 0x80) goto ret; else e++;
+
+	/* @todo work out why we always get 0xC9 out of this register. */
+	// /OSF /BB32kHz /CRATE1 /CRATE0 /EN32kHz BSY? A2F? A1F?
+	if ((bytes[15] & 0x80) != 0x80) goto ret; else e++;
+
+	return 0;
+ ret:
+	SERIALSTR("checkRTCdata: ");
+	serial_send_int(e);
+	SERIALSTR("\r\n   bytes:");
+	for (uint8_t i=0; i<19; i++) {
+		SERIALSTR(" ");
+		serial_send_int(i);
+		SERIALSTR(":");
+		serial_send_hex_int(bytes[i]);
+	}
+	SERIALSTR("\r\n");
+	return e;
+}
+
+
+static void setupRTCdata(uint8_t *bytes)
+{
+	bytes[0] = 0;		/* seconds */
+	bytes[1] = 0;		/* minues */
+	bytes[2] = 0x12;	/* hours */
+	bytes[3] = 0x01;	/* day */
+	bytes[4] = 0x01;	/* date */
+	bytes[5] = 0x01;	/* month/century */
+	bytes[6] = 0x99;	/* year */
+
+	bytes[7] = 0;
+	bytes[8] = 0;
+	bytes[9] = 0;
+	bytes[10] = 0;
+	bytes[11] = 0;
+	bytes[12] = 0;
+	bytes[13] = 0;
+
+	bytes[14] = 0x80;	/* EOSC etc */
+	bytes[15] = 0;		/* OSF, BB32kHz etc */
+}
+
+
+static void inc_decimaltime(struct Timekeeper *me)
+{
+	/* There is no need to disable interrupts while we access or update
+	   dseconds, even though it's a four byte variable, as we never touch
+	   it during an interrupt handler. */
+
+	if (me->decimaltime > 99999) {
+		SERIALSTR("me->decimaltime == ");
+		char ds[12];
+		snprintf(ds, 12, "%lu", me->decimaltime);
+		serial_send(ds);
+		SERIALSTR("\r\n");
+	}
+	Q_ASSERT( me->decimaltime <= 99999 );
+	if (99999 == me->decimaltime) {
+		me->decimaltime = 0;
+	} else {
+		me->decimaltime++;
+	}
+}
+
+
+static void inc_normaltime(struct Timekeeper *me)
+{
+	Q_ASSERT( me->normaltime.h < 24 );
+	Q_ASSERT( me->normaltime.m < 60 );
+	Q_ASSERT( me->normaltime.s < 60 );
+
+	me->normaltime.s ++;
+	if (me->normaltime.s == 60) {
+		me->normaltime.s = 0;
+		me->normaltime.m ++;
+		if (me->normaltime.m == 60) {
+			me->normaltime.m = 0;
+			me->normaltime.h ++;
+			if (me->normaltime.h == 24) {
+				me->normaltime.h = 0;
+			}
+		}
+	}
+}
+
+
+static void
+normal_to_rtc(struct NormalTime *normaltime, uint8_t *bytes)
+{
+	Q_ASSERT( normaltime->h < 24 );
+	Q_ASSERT( normaltime->m < 60 );
+	Q_ASSERT( normaltime->s < 60 );
+	bytes[0] = (normaltime->s % 10) | ((normaltime->s / 10) << 4);
+	bytes[1] = (normaltime->m % 10) | ((normaltime->m / 10) << 4);
+	bytes[2] = (normaltime->h % 10) | ((normaltime->h / 10) << 4);
+}
+
+
+static void
+rtc_to_normal(uint8_t *bytes, struct NormalTime *normaltime)
+{
+	/* hours */
+	normaltime->h = (bytes[2] & 0x0f) + (((bytes[2] & 0x30) >> 4) * 10);
+	/* minutes */
+	normaltime->m = (bytes[1] & 0x0f) + (((bytes[1] & 0x70) >> 4) * 10);
+	/* seconds */
+	normaltime->s = (bytes[0] & 0x0f) + (((bytes[0] & 0x70) >> 4) * 10);
+	normaltime->pad = 0;
 }
 
 
 uint32_t
-get_dseconds(struct Timekeeper *me)
+get_decimal_time(void)
 {
-	return me->dseconds;
+	return timekeeper.decimaltime;
 }
 
-
-void set_dseconds(struct Timekeeper *me, uint32_t ds)
-{
-	post_r(me, SET_TIME_SIGNAL, (QParam)ds);
-}
 
 static void
-start_rtc_twi_read(struct Timekeeper *me,
-		   uint8_t reg, uint8_t nbytes, uint8_t rw)
+set_decimal_time(uint32_t ds)
+{
+	post_r((&timekeeper), SET_DECIMAL_TIME_SIGNAL, (QParam)ds);
+}
+
+
+struct NormalTime
+get_normal_time(void)
+{
+	return timekeeper.normaltime;
+}
+
+
+static void
+set_normal_time(struct NormalTime nt)
+{
+	post_r((&timekeeper), SET_NORMAL_TIME_SIGNAL, nt2it(nt));
+}
+
+
+static void
+start_rtc_twi_read(struct Timekeeper *me, uint8_t reg, uint8_t nbytes)
 {
 	static char buffer[100];
 
-	snprintf(buffer, 99, "tk>TWI: reg=%d nbytes=%d rw=%c\r\n",
-		 reg, nbytes, rw ? 'R' : 'W');
+	snprintf(buffer, 99, "tk>TWI: reg=%d nbytes=%d\r\n", reg, nbytes);
 	serial_send(buffer);
+
+	Q_ASSERT( nbytes <= 20 );
 
 	me->twiRequest0.qactive = (QActive*)me;
 	me->twiRequest0.signal = TWI_REPLY_0_SIGNAL;
@@ -244,7 +482,7 @@ start_rtc_twi_read(struct Timekeeper *me,
 	me->twiRequest1.signal = TWI_REPLY_1_SIGNAL;
 	me->twiRequest1.bytes = me->twiBuffer1;
 	me->twiRequest1.nbytes = nbytes;
-	me->twiRequest1.address = (RTC_ADDR << 1) | (rw ? 1 : 0);
+	me->twiRequest1.address = (RTC_ADDR << 1) | 0b1;
 	me->twiRequest1.count = 0;
 	me->twiRequest1.status = 0;
 	me->twiRequestAddresses[1] = &(me->twiRequest1);
@@ -253,19 +491,70 @@ start_rtc_twi_read(struct Timekeeper *me,
 }
 
 
-void get_dtimes(struct Timekeeper *me, uint8_t *dtimes)
+void get_times(uint8_t *times)
 {
-	Q_ASSERT( me->dseconds <= 99999 );
-	return decimal_time_to_dtimes(me->dseconds, dtimes);
+	switch (get_time_mode()) {
+	case DECIMAL_MODE:
+		Q_ASSERT( timekeeper.decimaltime <= 99999 );
+		decimal_to_dtimes(timekeeper.decimaltime, times);
+		break;
+	case NORMAL_MODE:
+		Q_ASSERT( timekeeper.normaltime.h <= 23 );
+		Q_ASSERT( timekeeper.normaltime.m <= 59 );
+		Q_ASSERT( timekeeper.normaltime.s <= 59 );
+		times[0] = timekeeper.normaltime.h;
+		times[1] = timekeeper.normaltime.m;
+		times[2] = timekeeper.normaltime.s;
+		break;
+	default:
+		Q_ASSERT( 0 );
+		break;
+	}
 }
 
 
-void set_dtimes(struct Timekeeper *me, uint8_t *dtimes)
+void set_times(uint8_t *times)
 {
-	/* These three values are all unsigned and can all be zero, so we don't
-	   need to check the lower bound. */
-	Q_ASSERT( dtimes[0] <= 9 );
-	Q_ASSERT( dtimes[1] <= 99 );
-	Q_ASSERT( dtimes[2] <= 99 );
-	set_dseconds(me, dtimes_to_decimal_time(dtimes));
+	uint32_t dt;
+	struct NormalTime nt;
+
+	switch (get_time_mode()) {
+	case DECIMAL_MODE:
+		/* These three values are all unsigned and can all be zero, so
+		   we don't need to check the lower bound. */
+		Q_ASSERT( times[0] <= 9 );
+		Q_ASSERT( times[1] <= 99 );
+		Q_ASSERT( times[2] <= 99 );
+		dt = dtimes_to_decimal(times);
+		set_decimal_time(dt);
+		SERIALSTR("Time set to ");
+		print_decimal_time(dt);
+		SERIALSTR("\r\n");
+		break;
+	case NORMAL_MODE:
+		Q_ASSERT( times[0] <= 23 );
+		Q_ASSERT( times[1] <= 59 );
+		Q_ASSERT( times[2] <= 59 );
+		nt.h = times[0];
+		nt.m = times[1];
+		nt.s = times[2];
+		nt.pad = 0;
+		set_normal_time(nt);
+		SERIALSTR("Time set to ");
+		print_normal_time(nt);
+		SERIALSTR("\r\n");
+		break;
+	default:
+		Q_ASSERT( 0 );
+		break;
+	}
+}
+
+
+static void default_times(struct Timekeeper *me)
+{
+	me->normaltime.h = 0x12;
+	me->normaltime.m = 0x00;
+	me->normaltime.s = 0x00;
+	me->decimaltime = normal_to_decimal(me->normaltime);
 }

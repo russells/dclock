@@ -2,6 +2,7 @@
 #include "alarm.h"
 #include "serial.h"
 #include "bsp.h"
+#include "time.h"
 
 /**
  * @file Handle button presses, and send them to other active objects.
@@ -68,6 +69,7 @@ updateSecret(uint8_t press)
 			secretIndex = 0;
 			secretTimeout = 0;
 			SERIALSTR("SECRET\r\n");
+			toggle_time_mode();
 		} else {
 			secretTimeout = SECRET_TIMEOUT;
 		}

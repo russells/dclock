@@ -5,6 +5,7 @@
 
 struct TimeDisplay {
 	QActive super;
+	uint8_t mode;
 	uint8_t ready;
 };
 

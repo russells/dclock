@@ -17,6 +17,7 @@ Q_DEFINE_THIS_FILE;
 
 static void timer1_init(void);
 static void buttons_init(void);
+static void int0_init(void);
 
 
 void BSP_QF_onStartup(void)
@@ -27,6 +28,12 @@ void BSP_QF_onStartup(void)
 	   the buttons and send button events. */
 	timer1_init();
 	buttons_init();
+}
+
+
+void BSP_enable_rtc_interrupt(void)
+{
+	int0_init();
 }
 
 
@@ -92,6 +99,21 @@ void BSP_init(void)
 	WDTCSR |= (1 << WDIE);
 	/* Make the Arduino LED pin (D13) an output. */
 	DDRB |= (1 << 5);
+}
+
+
+static void
+int0_init(void)
+{
+	EICRA = 0b0011;		/* INT0, rising edge */
+	EIMSK |= (1 << 0);	/* INT0 interrupt enable */
+	PORTD |= (1 << 2);	/* Pullup on the INT0 input */
+}
+
+
+SIGNAL(INT0_vect)
+{
+	postISR((&timekeeper), TICK_NORMAL_SIGNAL, 0);
 }
 
 

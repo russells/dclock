@@ -13,6 +13,7 @@ enum ButtonNumbers {
 	BUTTON3,
 };
 
+
 enum DClockSignals {
 	/**
 	 * Button press.
@@ -37,6 +38,9 @@ enum DClockSignals {
 	BUTTON_DOWN_REPEAT_SIGNAL,
 	BUTTON_DOWN_RELEASE_SIGNAL,
 
+	NORMAL_MODE_SIGNAL,
+	DECIMAL_MODE_SIGNAL,
+
 	/**
 	 * Sent once per second so we can confirm that the event loop is
 	 * running.
@@ -50,6 +54,10 @@ enum DClockSignals {
 	 * Sent to the clock once per decimal second.
 	 */
 	TICK_DECIMAL_SIGNAL,
+	/**
+	 * Sent to the clock once per normal second.
+	 */
+	TICK_NORMAL_SIGNAL,
 	/**
 	 * A notification that we're setting the time or alarm.
 	 */
@@ -82,7 +90,8 @@ enum DClockSignals {
 	/**
 	 * The time has been changed, so set it and write to the RTC.
 	 */
-	SET_TIME_SIGNAL,
+	SET_DECIMAL_TIME_SIGNAL,
+	SET_NORMAL_TIME_SIGNAL,
 
 	TWI_REQUEST_SIGNAL,
 	TWI_REPLY_SIGNAL,

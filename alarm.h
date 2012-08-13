@@ -1,11 +1,13 @@
 #ifndef alarm_h_INCLUDED
 #define alarm_h_INCLUDED
 
+#include "time.h"
 #include "qpn_port.h"
 
 struct Alarm {
 	QActive super;
-	uint32_t alarmTime;
+	uint32_t decimalAlarmTime;
+	struct NormalTime normalAlarmTime;
 	uint8_t armed;
 	/** The LCD brightness when we turned on the alarm. */
 	uint8_t enterBrightness;
@@ -21,10 +23,8 @@ extern struct Alarm alarm;
 
 void alarm_ctor(void);
 
-uint32_t get_alarm_dseconds(struct Alarm *me);
-void set_alarm_dseconds(struct Alarm *me, uint32_t dseconds);
-void get_alarm_dtimes(struct Alarm *me, uint8_t *dtimes);
-void set_alarm_dtimes(struct Alarm *me, uint8_t *dtimes);
+void get_alarm_times(struct Alarm *me, uint8_t *dtimes);
+void set_alarm_times(struct Alarm *me, uint8_t *dtimes);
 
 uint8_t get_alarm_state(struct Alarm *me);
 void set_alarm_state(struct Alarm *me, uint8_t onoff);
