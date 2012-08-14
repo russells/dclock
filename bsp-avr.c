@@ -60,8 +60,19 @@ void QF_onIdle(void)
 	AVR_sleep();
 }
 
+
+/* Definitions for the LCD brightness PWM pin. */
+#define BRIGHT_PORT PORTD
+#define BRIGHT_DDR  DDRD
+#define BRIGHT_BIT  3
+
+
 void Q_onAssert(char const Q_ROM * const Q_ROM_VAR file, int line)
 {
+	/* Disconnect the timer from the pin so it goes full brightness.  We
+	   want to be able to see the exception message. */
+	BRIGHT_DDR &= ~(1 << BRIGHT_BIT);
+
 	serial_assert_nostop(file, line);
 	lcd_assert(file, line);
 }
@@ -266,11 +277,6 @@ BSP_getButton(void)
 		return 3;
 	return 0;
 }
-
-
-#define BRIGHT_PORT PORTD
-#define BRIGHT_DDR  DDRD
-#define BRIGHT_BIT  3
 
 
 /**

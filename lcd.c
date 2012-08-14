@@ -106,6 +106,8 @@ static uint8_t brightness;
 
 
 static void one_char(uint8_t rs, char c);
+static void lcd_on(void);
+static void lcd_off(void);
 
 
 void lcd_init(void)
@@ -151,6 +153,7 @@ void lcd_assert(char const Q_ROM * const Q_ROM_VAR file, int line)
 {
 	cli();
 	wdt_disable();
+	lcd_on();
 	lcd_clear();
 	_delay_ms(10);
 	LCD_LINE1_ROM("ASSERT: ");
