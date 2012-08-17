@@ -9,6 +9,8 @@
 
 Q_DEFINE_THIS_FILE;
 
+#include "time-arithmetic.h"
+
 struct Alarm alarm;
 
 
@@ -18,10 +20,19 @@ static QState onState(struct Alarm *me);
 static QState onDecimalState(struct Alarm *me);
 static QState onNormalState(struct Alarm *me);
 static QState offState(struct Alarm *me);
-static QState ignoreButtonsState(struct Alarm *me);
+static QState alarmButtonsState(struct Alarm *me);
 static QState alarmedState(struct Alarm *me);
 static QState alarmedOnState(struct Alarm *me);
 static QState alarmedOffState(struct Alarm *me);
+static QState snoozeState(struct Alarm *me);
+static QState snoozeNormalState(struct Alarm *me);
+static QState snoozeDecimalState(struct Alarm *me);
+
+
+#define SNOOZE_MINUTES 5
+#define MAX_SNOOZE_COUNT 4
+#define ALARM_SOUND_SECONDS 30
+#define ALARM_SOUND_COUNT (37 * ALARM_SOUND_SECONDS) /* Approximate */
 
 
 void get_alarm_times(struct Alarm *me, uint8_t *times)
@@ -88,6 +99,8 @@ void set_alarm_times(struct Alarm *me, uint8_t *times)
 	default:
 		Q_ASSERT( 0 );
 	}
+	me->decimalSnoozeTime = me->decimalAlarmTime;
+	me->normalSnoozeTime = me->normalAlarmTime;
 }
 
 
@@ -96,11 +109,20 @@ void alarm_ctor(void)
 	SERIALSTR("alarm_ctor()\r\n");
 	serial_drain();
 	QActive_ctor((QActive*)(&alarm), (QStateHandler)&initialState);
+
 	alarm.decimalAlarmTime = 50000;
 	alarm.normalAlarmTime.h =  12;
 	alarm.normalAlarmTime.m = 0;
 	alarm.normalAlarmTime.s = 0;
 	alarm.normalAlarmTime.pad = 0;
+
+	alarm.decimalSnoozeTime = 0;
+	alarm.normalSnoozeTime.h =  0;
+	alarm.normalSnoozeTime.m = 0;
+	alarm.normalSnoozeTime.s = 0;
+	alarm.normalSnoozeTime.pad = 0;
+	alarm.snoozeCount = 0;
+
 	alarm.ready = 0;
 	alarm.armed = 0;
 }
@@ -138,13 +160,15 @@ static QState topState(struct Alarm *me)
 	case NORMAL_MODE_SIGNAL:
 		if (me->armed) {
 			return Q_TRAN(onNormalState);
+		} else {
+			return Q_TRAN(offState);
 		}
-		return Q_HANDLED();
 	case DECIMAL_MODE_SIGNAL:
 		if (me->armed) {
 			return Q_TRAN(onDecimalState);
+		} else {
+			return Q_TRAN(offState);
 		}
-		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 	case BUTTON_SELECT_REPEAT_SIGNAL:
@@ -170,6 +194,9 @@ static QState onState(struct Alarm *me)
 	case Q_ENTRY_SIG:
 		SERIALSTR("> alarm onState\r\n");
 		me->armed = 73;
+		me->decimalSnoozeTime = me->decimalAlarmTime;
+		me->normalSnoozeTime = me->normalAlarmTime;
+		me->snoozeCount = 0;
 		return Q_HANDLED();
 	case ALARM_ON_SIGNAL:
 		return Q_HANDLED();
@@ -235,7 +262,7 @@ static QState offState(struct Alarm *me)
 }
 
 
-static QState ignoreButtonsState(struct Alarm *me)
+static QState alarmButtonsState(struct Alarm *me)
 {
 	switch (Q_SIG(me)) {
 	case BUTTON_SELECT_PRESS_SIGNAL:
@@ -262,6 +289,8 @@ static QState alarmedState(struct Alarm *me)
 	case Q_ENTRY_SIG:
 		SERIALSTR("Alarm\r\n");
 		QActive_arm((QActive*)me, 100);
+		me->turnOff = 0;
+		me->alarmSoundCount = 0;
 		me->enterBrightness = lcd_get_brightness();
 		switch (me->enterBrightness) {
 		case 4:
@@ -278,29 +307,77 @@ static QState alarmedState(struct Alarm *me)
 			break;
 		}
 		return Q_HANDLED();
-	case Q_TIMEOUT_SIG:
-		return Q_TRAN(topState);
+	case BUTTON_UP_PRESS_SIGNAL:
+	case BUTTON_DOWN_PRESS_SIGNAL:
+	case BUTTON_SELECT_PRESS_SIGNAL:
+		/* We want the alarm to stop sounding as soon as a button is
+		   pressed, but at that stage we haven't decided whether to
+		   snooze or turn off.  So transition back here and wait for
+		   long presses or button up events. */
+		return Q_TRAN(alarmedState); /* This state. */
+	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
+	case BUTTON_SELECT_REPEAT_SIGNAL:
+		/* The way to turn off the alarm (rather than snoozing) is to
+		   hold down the select button for a long press time. */
+		/** @todo Is a long press time enough to turn off the alarm?
+		    Should we count a longer time by counting select repeat
+		    signals? */
+		/** @todo Make a noise when the select button has been pressed
+		    long enough to turn off the alarm.  A sleepy user needs
+		    this feedback. */
+		me->turnOff = 73;
+		return Q_HANDLED();
+	case BUTTON_UP_RELEASE_SIGNAL:
+	case BUTTON_DOWN_RELEASE_SIGNAL:
 	case BUTTON_SELECT_RELEASE_SIGNAL:
-		return Q_TRAN(offState);
+		/* If the alarm is snoozed by the user, start counting snooze
+		   periods again. */
+		me->snoozeCount = 0;
+		post(me, ALARM_SOUND_OFF_SIGNAL, 0);
+		return Q_HANDLED();
+	case ALARM_SOUND_OFF_SIGNAL:
+		if (me->turnOff) {
+			/* me->turnOff will only be true in response to a long
+			   press of the select button. */
+			SERIALSTR("(me->turnOff)\r\n");
+			return Q_TRAN(offState);
+		} else if (me->snoozeCount >= MAX_SNOOZE_COUNT) {
+			SERIALSTR("(me->snoozeCount==");
+			serial_send_int(me->snoozeCount);
+			SERIALSTR(")\r\n");
+			return Q_TRAN(offState);
+		} else {
+			switch (get_time_mode()) {
+			case NORMAL_MODE:
+				return Q_TRAN(snoozeNormalState);
+			case DECIMAL_MODE:
+				return Q_TRAN(snoozeDecimalState);
+			default:
+				Q_ASSERT( 0 );
+			}
+		}
 	case Q_EXIT_SIG:
 		SERIALSTR("Alarm stopped\r\n");
 		LCD_LINE2_ROM("                ");
 		lcd_set_brightness(me->enterBrightness);
 		return Q_HANDLED();
 	}
-	return Q_SUPER(ignoreButtonsState);
+	return Q_SUPER(alarmButtonsState);
 }
 
+
+#define ON_OFF_TIME 20
 
 static QState alarmedOnState(struct Alarm *me)
 {
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		LCD_LINE2_ROM("Alarm!          ");
-		QActive_arm((QActive*)me, 20);
+		QActive_arm((QActive*)me, ON_OFF_TIME);
 		lcd_set_brightness(me->onBrightness);
 		return Q_HANDLED();
 	case Q_TIMEOUT_SIG:
+		me->alarmSoundCount += ON_OFF_TIME;
 		return Q_TRAN(alarmedOffState);
 	}
 	return Q_SUPER(alarmedState);
@@ -312,13 +389,90 @@ static QState alarmedOffState(struct Alarm *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		LCD_LINE2_ROM("                ");
-		QActive_arm((QActive*)me, 20);
+		QActive_arm((QActive*)me, ON_OFF_TIME);
 		lcd_set_brightness(me->offBrightness);
 		return Q_HANDLED();
 	case Q_TIMEOUT_SIG:
+		me->alarmSoundCount += ON_OFF_TIME;
+		if (me->alarmSoundCount >= ALARM_SOUND_COUNT) {
+			post(me, ALARM_SOUND_OFF_SIGNAL, 0);
+		}
 		return Q_TRAN(alarmedOnState);
 	}
 	return Q_SUPER(alarmedState);
+}
+
+
+static void inc_snooze_times(struct Alarm *me)
+{
+	for (uint8_t i=0; i<SNOOZE_MINUTES; i++) {
+		me->normalSnoozeTime.m =
+			inc_normal_minutes(me->normalSnoozeTime.m);
+		if (me->normalSnoozeTime.m == 0) {
+			me->normalSnoozeTime.h =
+				inc_normal_hours(me->normalSnoozeTime.h);
+		}
+	}
+	me->decimalSnoozeTime += 1000 * SNOOZE_MINUTES;
+	if (me->decimalSnoozeTime > 99999) {
+		me->decimalSnoozeTime -= 100000L;
+	}
+}
+
+
+static QState snoozeState(struct Alarm *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		me->snoozeCount ++;
+		inc_snooze_times(me);
+		SERIALSTR("> snoozeState ");
+		print_normal_time(me->normalSnoozeTime);
+		SERIALSTR(" snoozeCount==");
+		serial_send_int(me->snoozeCount);
+		SERIALSTR("\r\n");
+		return Q_HANDLED();
+	case Q_EXIT_SIG:
+		SERIALSTR("< snoozeState\r\n");
+		return Q_HANDLED();
+	}
+	return Q_SUPER(topState);
+}
+
+
+static QState snoozeNormalState(struct Alarm *me)
+{
+	struct NormalTime *thetimep;
+
+	switch (Q_SIG(me)) {
+	case TICK_NORMAL_SIGNAL:
+		thetimep = it2ntp(Q_PAR(me));
+		if (thetimep->s == me->normalSnoozeTime.s
+		    && thetimep->m == me->normalSnoozeTime.m
+		    && thetimep->h == me->normalSnoozeTime.h) {
+			return Q_TRAN(alarmedOnState);
+		} else {
+			return Q_HANDLED();
+		}
+	}
+	return Q_SUPER(snoozeState);
+}
+
+
+static QState snoozeDecimalState(struct Alarm *me)
+{
+	uint32_t thetime;
+
+	switch (Q_SIG(me)) {
+	case TICK_DECIMAL_SIGNAL:
+		thetime = Q_PAR(me);
+		if (thetime == me->decimalAlarmTime) {
+			return Q_TRAN(alarmedOnState);
+		} else {
+			return Q_HANDLED();
+		}
+	}
+	return Q_SUPER(snoozeState);
 }
 
 

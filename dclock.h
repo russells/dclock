@@ -102,6 +102,12 @@ enum DClockSignals {
 	ALARM_ON_SIGNAL,
 	ALARM_OFF_SIGNAL,
 
+	/**
+	 * Sent by the alarm to itself to stop the alarm and go into snooze (or
+	 * off) state.
+	 */
+	ALARM_SOUND_OFF_SIGNAL,
+
 	MAX_PUB_SIG,
 	MAX_SIG,
 };

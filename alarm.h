@@ -8,6 +8,11 @@ struct Alarm {
 	QActive super;
 	uint32_t decimalAlarmTime;
 	struct NormalTime normalAlarmTime;
+	uint8_t decimalSnoozeTime;
+	struct NormalTime normalSnoozeTime;
+	uint16_t alarmSoundCount;
+	uint8_t snoozeCount;
+	uint8_t turnOff;
 	uint8_t armed;
 	/** The LCD brightness when we turned on the alarm. */
 	uint8_t enterBrightness;
