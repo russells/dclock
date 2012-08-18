@@ -1,0 +1,56 @@
+-*- outline -*-
+
+* Initial test
+
+** Start the clock.
+*** Confirm it is in normal time mode.
+** Note the time.
+** Let it tick for a few seconds.
+** Press reset.
+*** confirm the time continues from where it was.
+
+* Time mode change test.
+
+** Press the secret button sequence.
+*** Confirm the clock changes to decimal time.
+*** Confirm that the decimal time matches the previous normal time.
+
+* Time mode change consistency test
+
+For this test, perhaps change the button sequence to something simpler.
+
+** Set the alarm to a known time.
+** Change back and forth between normal and decimal modes.
+*** Confirm that the time changes consistently between modes.
+*** Confirm that the alarm time is consistent between modes.
+** Change between modes, and set the alarm at each change.
+Set the alarm by changing to off, then on, but not changing the alarm time.
+*** Confirm that the alarm time ratchets backwards.
+This confirms that the seconds part of the alarm time is forced to zero.
+
+* Normal alarm time test
+
+** Start in normal mode.
+** Set the alarm for a minute in the future.
+*** alarm triggers.
+*** stops when SELECT is pressed.
+*** goes into snooze when select is quickly released.
+** Wait until alarm triggers again.
+*** stops when up or down pressed.
+*** goes into snooze when up or down released, no matter how long the press.
+** Wait until alarm triggers again.
+*** stops when select pressed and held.
+*** turns off when select held for a long press then released.
+
+* Decimal alarm time test
+
+** Start in decimal mode.
+** All the same tests as for the normal alarm time test.
+
+* Alarm mode change consistency test
+
+** Change back and forth between normal and decimal modes.
+*** Confirm that the alarm time is constant at each change.
+
+Note that the time should stable at 36 minute normal intervals, or 25
+minute decimal intervals.
