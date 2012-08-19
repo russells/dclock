@@ -8,7 +8,7 @@ struct Alarm {
 	QActive super;
 	uint32_t decimalAlarmTime;
 	struct NormalTime normalAlarmTime;
-	uint8_t decimalSnoozeTime;
+	uint32_t decimalSnoozeTime;
 	struct NormalTime normalSnoozeTime;
 	uint16_t alarmSoundCount;
 	uint8_t snoozeCount;

@@ -216,7 +216,9 @@ static QState onDecimalState(struct Alarm *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		SERIALSTR("> alarm onDecimalState\r\n");
+		SERIALSTR("> alarm onDecimalState ");
+		print_decimal_time(me->decimalAlarmTime);
+		SERIALSTR("\r\n");
 		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:
 		thetime = Q_PAR(me);
@@ -236,7 +238,9 @@ static QState onNormalState(struct Alarm *me)
 
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		SERIALSTR("> alarm onNormalState\r\n");
+		SERIALSTR("> alarm onNormalState ");
+		print_normal_time(me->normalAlarmTime);
+		SERIALSTR("\r\n");
 		return Q_HANDLED();
 	case TICK_NORMAL_SIGNAL:
 		thetimep = it2ntp(Q_PAR(me));
@@ -417,8 +421,9 @@ static void inc_snooze_times(struct Alarm *me)
 				inc_normal_hours(me->normalSnoozeTime.h);
 		}
 	}
-	me->decimalSnoozeTime += 1000 * SNOOZE_MINUTES;
-	if (me->decimalSnoozeTime > 99999) {
+
+	me->decimalSnoozeTime += 100 * SNOOZE_MINUTES;
+	if (me->decimalSnoozeTime > 99999L) {
 		me->decimalSnoozeTime -= 100000L;
 	}
 }
@@ -431,7 +436,16 @@ static QState snoozeState(struct Alarm *me)
 		me->snoozeCount ++;
 		inc_snooze_times(me);
 		SERIALSTR("> snoozeState ");
-		print_normal_time(me->normalSnoozeTime);
+		switch (get_time_mode()) {
+		case NORMAL_MODE:
+			print_normal_time(me->normalSnoozeTime);
+			break;
+		case DECIMAL_MODE:
+			print_decimal_time(me->decimalSnoozeTime);
+			break;
+		default:
+			Q_ASSERT( 0 );
+		}
 		SERIALSTR(" snoozeCount==");
 		serial_send_int(me->snoozeCount);
 		SERIALSTR("\r\n");
@@ -472,7 +486,7 @@ static QState snoozeDecimalState(struct Alarm *me)
 	switch (Q_SIG(me)) {
 	case TICK_DECIMAL_SIGNAL:
 		thetime = Q_PAR(me);
-		if (thetime == me->decimalAlarmTime) {
+		if (thetime == me->decimalSnoozeTime) {
 			return Q_TRAN(alarmedOnState);
 		} else {
 			return Q_HANDLED();
