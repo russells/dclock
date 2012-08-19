@@ -1,6 +1,7 @@
 #include "timedisplay.h"
 #include "timekeeper.h"
 #include "time.h"
+#include "alarm.h"
 #include "lcd.h"
 #include "dclock.h"
 #include <stdio.h>
@@ -23,6 +24,7 @@ void timedisplay_ctor(void)
 {
 	QActive_ctor((QActive*)(&timedisplay), (QStateHandler)initial);
 	timedisplay.ready = 0;
+	timedisplay.statuses = 0;
 }
 
 
@@ -74,6 +76,115 @@ static void displayNormalTime(struct TimeDisplay *me, struct NormalTime nt)
 }
 
 
+/* static void displayAlarmTime(struct TimeDisplay *me) */
+/* { */
+/* 	char buf[17]; */
+/* 	uint8_t alarmtimes[3]; */
+/* 	uint8_t nowtimes[3]; */
+/* 	uint8_t i; */
+/* 	uint8_t spaces; */
+/* 	char sep; */
+
+/* 	get_alarm_times(&alarm, alarmtimes); */
+/* 	get_times(nowtimes); */
+/* 	spaces = nowtimes[1] % 6; */
+/* 	if (me->mode == DECIMAL_MODE) { */
+/* 		sep = '.'; */
+/* 	} else { */
+/* 		sep = ':'; */
+/* 	} */
+
+/* 	for (i=0; i<spaces; i++) { */
+/* 		buf[i] = ' '; */
+/* 	} */
+/* 	snprintf(buf+spaces, 17-spaces, "Alarm:%02d%c%02d", */
+/* 		 alarmtimes[0], sep, alarmtimes[1]); */
+/* 	LCD_LINE2_ROM("Alarm on        "); */
+/* 	i = spaces + 11; */
+/* 	while (i<16) { */
+/* 		buf[i] = ' '; */
+/* 		i++; */
+/* 	} */
+/* 	buf[i] = '\0'; */
+/* 	Q_ASSERT( buf[16] == '\0' ); */
+/* 	lcd_line2(buf); */
+/* } */
+
+
+/**
+ * Display a (possibly moving) string on the bottom line.
+ *
+ * @param s the string
+ * @param n the length of the string.  Saves calling strlen() here.
+ * @param move -1 = don't move, 0 = move with hours, 1 = move with minutes, 2 =
+ * move with seconds.
+ */
+static void displayBottomString(const char *s, uint8_t n, int8_t move)
+{
+	uint8_t times[3];
+	uint8_t spaces;
+	char buf[17];
+	uint8_t i;
+
+	Q_ASSERT( n <= 16 );
+	Q_ASSERT( s[n] == '\0' );
+	if (-1 != move) {
+		Q_ASSERT( move >= 0 );
+		Q_ASSERT( move <= 2);
+		get_times(times);
+		spaces = times[move] % (17 - n);
+		i = 0;
+		while (i < spaces) {
+			buf[i] = ' ';
+			i++;
+		}
+	} else {
+		spaces = 0;
+		i = 0;
+	}
+	snprintf(buf+spaces, 17-spaces, s);
+	i = spaces + n;
+	while (i<16) {
+		buf[i] = ' ';
+		i++;
+	}
+	buf[i] = '\0';
+	Q_ASSERT( buf[16] == '\0' );
+	lcd_line2(buf);
+}
+
+
+static void displayStatus(struct TimeDisplay *me)
+{
+	/* Step through the list of statuses from highest to lowest priority,
+	   showing the first one that's active. */
+	if (me->statuses & DSTAT_ALARM_RUNNING) {
+		displayBottomString("** ALARM **", 11, 2);
+	} else if (me->statuses & DSTAT_SNOOZE) {
+		displayBottomString("Zzz..", 5, 2);
+	} else if (me->statuses & DSTAT_ALARM) {
+		displayBottomString("A", 1, 1);
+	} else {
+		LCD_LINE2_ROM("                ");
+	}
+
+}
+
+
+void display_status_on(enum DisplayStatus ds)
+{
+	timedisplay.statuses |= ds;
+	displayStatus(&timedisplay);
+}
+
+
+void display_status_off(enum DisplayStatus ds)
+{
+	timedisplay.statuses &= ~ds;
+	displayStatus(&timedisplay);
+}
+
+
 static QState top(struct TimeDisplay *me)
 {
 	switch(Q_SIG(me)) {
@@ -98,12 +209,14 @@ static QState normal(struct TimeDisplay *me)
 	case Q_ENTRY_SIG:
 		me->mode = NORMAL_MODE;
 		displayNormalTime(me, get_normal_time());
+		displayStatus(me);
 		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:
 		/* In normal mode, ignore decimal seconds. */
 		return Q_HANDLED();
 	case TICK_NORMAL_SIGNAL:
 		displayNormalTime(me, it2nt(Q_PAR(me)));
+		displayStatus(me);
 		return Q_HANDLED();
 	}
 	return Q_SUPER(top);
@@ -118,9 +231,11 @@ static QState decimal(struct TimeDisplay *me)
 		/* Display the time as we enter this state so we don't end up
 		   having to wait for the next second. */
 		displayDecimalTime(me, get_decimal_time());
+		displayStatus(me);
 		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:
 		displayDecimalTime(me, Q_PAR(me));
+		displayStatus(me);
 		return Q_HANDLED();
 	case TICK_NORMAL_SIGNAL:
 		/* In decimal mode, ignore normal seconds. */

@@ -2,6 +2,7 @@
 #include "time.h"
 #include "serial.h"
 #include "timesetter.h"
+#include "timedisplay.h"
 #include "dclock.h"
 #include "lcd.h"
 
@@ -197,8 +198,12 @@ static QState onState(struct Alarm *me)
 		me->decimalSnoozeTime = me->decimalAlarmTime;
 		me->normalSnoozeTime = me->normalAlarmTime;
 		me->snoozeCount = 0;
+		display_status_on(DSTAT_ALARM);
 		return Q_HANDLED();
 	case ALARM_ON_SIGNAL:
+		return Q_HANDLED();
+	case Q_EXIT_SIG:
+		display_status_off(DSTAT_ALARM);
 		return Q_HANDLED();
 	}
 	return Q_SUPER(topState);
@@ -306,6 +311,7 @@ static QState alarmedState(struct Alarm *me)
 			me->offBrightness = me->enterBrightness;
 			break;
 		}
+		display_status_on(DSTAT_ALARM_RUNNING);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_DOWN_PRESS_SIGNAL:
@@ -358,8 +364,8 @@ static QState alarmedState(struct Alarm *me)
 		}
 	case Q_EXIT_SIG:
 		SERIALSTR("Alarm stopped\r\n");
-		LCD_LINE2_ROM("                ");
 		lcd_set_brightness(me->enterBrightness);
+		display_status_off(DSTAT_ALARM_RUNNING);
 		return Q_HANDLED();
 	}
 	return Q_SUPER(alarmButtonsState);
@@ -372,7 +378,6 @@ static QState alarmedOnState(struct Alarm *me)
 {
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		LCD_LINE2_ROM("Alarm!          ");
 		QActive_arm((QActive*)me, ON_OFF_TIME);
 		lcd_set_brightness(me->onBrightness);
 		return Q_HANDLED();
@@ -388,7 +393,6 @@ static QState alarmedOffState(struct Alarm *me)
 {
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		LCD_LINE2_ROM("                ");
 		QActive_arm((QActive*)me, ON_OFF_TIME);
 		lcd_set_brightness(me->offBrightness);
 		return Q_HANDLED();
@@ -431,9 +435,11 @@ static QState snoozeState(struct Alarm *me)
 		SERIALSTR(" snoozeCount==");
 		serial_send_int(me->snoozeCount);
 		SERIALSTR("\r\n");
+		display_status_on(DSTAT_SNOOZE);
 		return Q_HANDLED();
 	case Q_EXIT_SIG:
 		SERIALSTR("< snoozeState\r\n");
+		display_status_off(DSTAT_SNOOZE);
 		return Q_HANDLED();
 	}
 	return Q_SUPER(topState);
