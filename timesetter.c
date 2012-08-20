@@ -121,21 +121,49 @@ static QState tempBrightnessState(struct TimeSetter *me)
 
 static void displayWithTimeout(struct TimeSetter *me, char *line)
 {
-	uint8_t i;
 	uint8_t dots;
 
-	i = 9;
 	dots = me->setTimeouts;
-	Q_ASSERT( dots <= 7 );
-	while (dots--) {
-		line[i++] = '.';
+	Q_ASSERT( dots < 7 );
+	switch (dots) {
+	case 6:
+		line[15] = '.';
+		line[14] = '.';
+		line[13] = '.';
+		break;
+	case 5:
+		line[15] = '*';
+		line[14] = '.';
+		line[13] = '.';
+		break;
+	case 4:
+		line[14] = '.';
+		line[13] = '.';
+		break;
+	case 3:
+		line[14] = '*';
+		line[13] = '.';
+		break;
+	case 2:
+		line[13] = '.';
+		break;
+	case 1:
+		line[13] = '*';
+		break;
 	}
-	Q_ASSERT( i <= 16 );
 	Q_ASSERT( line[16] == '\0' );
 	lcd_line2(line);
 }
 
 
+/**
+ * Display the current state of what we are setting on the bottom line.
+ *
+ * When setting the alarm, display "On" or "OFF", hours, minutes, and countdown
+ * timer.  When setting the time, display blank space, hours, minutes, seconds,
+ * and countdown timer.  The layout is arranged so that the hours and minutes
+ * appear in the same place on the top line in alarm and time setting.
+ */
 static void displaySettingTime(struct TimeSetter *me)
 {
 	char line[17];
@@ -155,30 +183,17 @@ static void displaySettingTime(struct TimeSetter *me)
 
 	switch (me->settingWhich) {
 	case SETTING_TIME:
-		snprintf(line, 17, "%02u%c%02u%c%02u        ",
+		snprintf(line, 17, "    %02u%c%02u%c%02u    ",
 			 me->setTime[0], separator, me->setTime[1], separator,
 			 me->setTime[2]);
 		break;
 	case SETTING_ALARM:
-		snprintf(line, 17, "%02u%c%02u           ",
+		snprintf(line, 17, "%s %02u%c%02u       ",
+			 (me->alarmOn ? "On " : "OFF"),
 			 me->setTime[0], separator, me->setTime[1]);
 		break;
 	default:
 		Q_ASSERT( 0 );
-	}
-	Q_ASSERT( line[16] == '\0' );
-	displayWithTimeout(me, line);
-}
-
-
-static void displayAlarmOnOff(struct TimeSetter *me)
-{
-	char line[17];
-
-	if (me->alarmOn) {
-		snprintf(line, 17, "On              ");
-	} else {
-		snprintf(line, 17, "Off             ");
 	}
 	Q_ASSERT( line[16] == '\0' );
 	displayWithTimeout(me, line);
@@ -211,11 +226,11 @@ static void displayMenuName(const char Q_ROM *name)
 }
 
 
-/** Wait two seconds in the time setting states between changes of dots. */
-#define TSET_TOUT (37*2)
+/** Wait 1.5 seconds in the time setting states between changes of dots. */
+#define TSET_TOUT ((37*3)/2)
 
-/** Have five dots of timeout in the time setting states. */
-#define N_TSET_TOUTS 5
+/** Have six stages of timeout in the time setting states. */
+#define N_TSET_TOUTS 6
 
 
 static QState setState(struct TimeSetter *me)
@@ -349,11 +364,16 @@ static QState setAlarmOnOffState(struct TimeSetter *me)
 		me->setTimeouts = N_TSET_TOUTS;
 		me->alarmOn = get_alarm_state(&alarm);
 		displayMenuName(setAlarmOnOffName);
-		displayAlarmOnOff(me);
+		/* We have to get the alarm times here since the hours and
+		   minutes are displayed when we are setting the on/off
+		   state. */
+		get_alarm_times(&alarm, me->setTime);
+		displaySettingTime(me);
+		lcd_set_cursor(1, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_SIGNAL:
 		me->setTimeouts = N_TSET_TOUTS;
-		displayAlarmOnOff(me);
+		displaySettingTime(me);
 		return Q_SUPER(setState);
 	case UPDATE_ALARM_TIMEOUT_SIGNAL:
 		Q_ASSERT( me->setTimeouts );
@@ -361,10 +381,14 @@ static QState setAlarmOnOffState(struct TimeSetter *me)
 		if (0 == me->setTimeouts) {
 			post(me, UPDATE_TIME_TIMEOUT_SIGNAL, 0);
 		} else {
-			displayAlarmOnOff(me);
+			displaySettingTime(me);
 			QActive_arm_sig((QActive*)me, TSET_TOUT,
 					UPDATE_ALARM_TIMEOUT_SIGNAL);
+			post(me, UPDATE_TIME_SET_CURSOR_SIGNAL, 0);
 		}
+		return Q_HANDLED();
+	case UPDATE_TIME_SET_CURSOR_SIGNAL:
+		lcd_set_cursor(1, 0);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
@@ -375,7 +399,7 @@ static QState setAlarmOnOffState(struct TimeSetter *me)
 		} else {
 			me->alarmOn = 73;
 		}
-		displayAlarmOnOff(me);
+		displaySettingTime(me);
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
@@ -401,7 +425,6 @@ static QState setAlarmState(struct TimeSetter *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("> setAlarmState\r\n");
-		get_alarm_times(&alarm, me->setTime);
 		displaySettingTime(me);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_SIGNAL:
@@ -462,7 +485,7 @@ static QState setHoursState(struct TimeSetter *me)
 		default:
 			Q_ASSERT(0);
 		}
-		lcd_set_cursor(1, 1);
+		lcd_set_cursor(1, 5);
 		return Q_HANDLED();
 	case UPDATE_HOURS_TIMEOUT_SIGNAL:
 		Q_ASSERT( me->setTimeouts );
@@ -487,7 +510,7 @@ static QState setHoursState(struct TimeSetter *me)
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
-		lcd_set_cursor(1, 1);
+		lcd_set_cursor(1, 5);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(setMinutesState);
@@ -531,7 +554,7 @@ static QState setMinutesState(struct TimeSetter *me)
 		default:
 			Q_ASSERT(0);
 		}
-		lcd_set_cursor(1, 4);
+		lcd_set_cursor(1, 8);
 		return Q_HANDLED();
 	case UPDATE_MINUTES_TIMEOUT_SIGNAL:
 		Q_ASSERT( me->setTimeouts );
@@ -556,7 +579,7 @@ static QState setMinutesState(struct TimeSetter *me)
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
-		lcd_set_cursor(1, 4);
+		lcd_set_cursor(1, 8);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		switch (me->settingWhich) {
@@ -610,7 +633,7 @@ static QState setSecondsState(struct TimeSetter *me)
 		default:
 			Q_ASSERT(0);
 		}
-		lcd_set_cursor(1, 7);
+		lcd_set_cursor(1, 11);
 		return Q_HANDLED();
 	case UPDATE_SECONDS_TIMEOUT_SIGNAL:
 		Q_ASSERT( me->setTimeouts );
@@ -635,7 +658,7 @@ static QState setSecondsState(struct TimeSetter *me)
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
-		lcd_set_cursor(1, 7);
+		lcd_set_cursor(1, 11);
 		return Q_HANDLED();
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		return Q_TRAN(setState);
