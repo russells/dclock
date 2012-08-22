@@ -35,6 +35,7 @@ uint8_t dec_seconds(uint8_t h);
 void print_normal_time(struct NormalTime nt);
 void print_decimal_time(uint32_t dt);
 
+uint32_t normal_day_seconds(struct NormalTime *ntp);
 
 /**
  * Convert a NormalTime to its integer representation.

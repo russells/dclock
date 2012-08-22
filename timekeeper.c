@@ -44,6 +44,9 @@ static void start_rtc_twi_read(struct Timekeeper *me,
 			       uint8_t reg, uint8_t nbytes);
 static void default_times(struct Timekeeper *me);
 
+static void setup_108_125(struct Timekeeper *me);
+static void synchronise_108_125(struct Timekeeper *me);
+
 void timekeeper_ctor(void)
 {
 	QActive_ctor((QActive*)(&timekeeper), (QStateHandler)(&tkInitial));
@@ -193,6 +196,7 @@ static QState runningState(struct Timekeeper *me)
 
 	case Q_ENTRY_SIG:
 		SERIALSTR("runningState\r\n");
+		setup_108_125(me);
 		set_time_mode(NORMAL_MODE);
 		BSP_enable_rtc_interrupt();
 		return Q_HANDLED();
@@ -216,24 +220,34 @@ static QState runningState(struct Timekeeper *me)
 
 	case TICK_DECIMAL_SIGNAL:
 		inc_decimaltime(me);
-		post_r((&alarm), TICK_DECIMAL_SIGNAL, me->decimaltime);
-		post_r((&timedisplay), TICK_DECIMAL_SIGNAL, me->decimaltime);
+		if (me->decimal125Count < 124) {
+			/* Only count to 124 decimal seconds.  Each 125th
+			   decimal second is counted by the code that
+			   synchronises the decimal and normal seconds at
+			   125/108 second boundaries. */
+			me->decimal125Count ++;
+			post_r((&alarm), TICK_DECIMAL_SIGNAL, me->decimaltime);
+			post_r((&timedisplay), TICK_DECIMAL_SIGNAL, me->decimaltime);
+		}
 		return Q_HANDLED();
 
 	case TICK_NORMAL_SIGNAL:
 		inc_normaltime(me);
 		post((&alarm), TICK_NORMAL_SIGNAL, nt2it(me->normaltime));
 		post((&timedisplay), TICK_NORMAL_SIGNAL, nt2it(me->normaltime));
+		synchronise_108_125(me);
 		return Q_HANDLED();
 
 	case SET_DECIMAL_TIME_SIGNAL:
 		me->decimaltime = (uint32_t)(Q_PAR(me));
 		me->normaltime = decimal_to_normal(me->decimaltime);
+		setup_108_125(me);
 		return Q_TRAN(tkSetTimeState);
 
 	case SET_NORMAL_TIME_SIGNAL:
 		me->normaltime = it2nt(Q_PAR(me));
 		me->decimaltime = normal_to_decimal(me->normaltime);
+		setup_108_125(me);
 		return Q_TRAN(tkSetTimeState);
 	}
 	return Q_SUPER(topState);
@@ -557,4 +571,31 @@ static void default_times(struct Timekeeper *me)
 	me->normaltime.m = 0x00;
 	me->normaltime.s = 0x00;
 	me->decimaltime = normal_to_decimal(me->normaltime);
+}
+
+
+static void setup_108_125(struct Timekeeper *me)
+{
+	uint32_t ntd;
+
+	ntd = normal_day_seconds(&(me->normaltime));
+	me->normal108Count = ntd % 108;
+	me->decimal125Count = me->decimaltime % 125;
+}
+
+
+static void synchronise_108_125(struct Timekeeper *me)
+{
+	me->normal108Count ++;
+	if (108 == me->normal108Count) {
+		me->normal108Count = 0;
+		me->decimal125Count = 0;
+		BSP_set_decimal_32_counter(0);
+		me->decimaltime = normal_to_decimal(me->normaltime);
+		/* We only count up to 124 seconds using the CPU timer and
+		   TICK_DECIMAL_32_SIGNALs, and the 125th second is counted
+		   here. */
+		post_r((&alarm), TICK_DECIMAL_SIGNAL, me->decimaltime);
+		post_r((&timedisplay), TICK_DECIMAL_SIGNAL, me->decimaltime);
+	}
 }

@@ -70,6 +70,12 @@ uint32_t normal_to_decimal(struct NormalTime ntime)
 }
 
 
+uint32_t normal_day_seconds(struct NormalTime *ntp)
+{
+	return ntp->s + (60L * ntp->m) + (3600L * ntp->h);
+}
+
+
 #define MAKE_INC(name,maxn,maxd)					\
 	uint8_t inc_##name(uint8_t v)					\
 	{								\

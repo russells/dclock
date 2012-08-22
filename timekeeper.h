@@ -15,6 +15,12 @@ struct Timekeeper {
 	/** The normal time, as hours, minutes, and seconds. */
 	struct NormalTime normaltime;
 
+	/** Set to zero every 108 normal seconds, for synchronisation. */
+	uint8_t normal108Count;
+
+	/** Used for synchronising the decimal and normal seconds. */
+	uint8_t decimal125Count;
+
 	/** Decimal or normal mode. */
 	uint8_t mode;
 
