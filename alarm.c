@@ -29,10 +29,15 @@ static QState snoozeState(struct Alarm *me);
 static QState snoozeNormalState(struct Alarm *me);
 static QState snoozeDecimalState(struct Alarm *me);
 
-
+#ifndef SNOOZE_MINUTES
 #define SNOOZE_MINUTES 5
+#endif
+#ifndef MAX_SNOOZE_COUNT
 #define MAX_SNOOZE_COUNT 4
+#endif
+#ifndef ALARM_SOUND_SECONDS
 #define ALARM_SOUND_SECONDS 30
+#endif
 #define ALARM_SOUND_COUNT (37 * ALARM_SOUND_SECONDS) /* Approximate */
 
 

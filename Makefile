@@ -25,6 +25,27 @@ BINPROGRAM = $(APPNAME).bin
 V := $(shell ./VERSION-GEN)
 D := $(shell date '+%Y-%m-%d %H:%M:%S %Z')
 
+# Allow specification of some of the run time stuff.
+ifdef SNOOZE_MINUTES
+SNOOZE_MINUTES_FLAG = -DSNOOZE_MINUTES=$(SNOOZE_MINUTES)
+else
+SNOOZE_MINUTES_FLAG =
+endif
+ifdef MAX_SNOOZE_COUNT
+MAX_SNOOZE_COUNT_FLAG = -DMAX_SNOOZE_COUNT=$(MAX_SNOOZE_COUNT)
+else
+MAX_SNOOZE_COUNT_FLAG =
+endif
+ifdef ALARM_SOUND_SECONDS
+ALARM_SOUND_SECONDS_FLAG = -DALARM_SOUND_SECONDS=$(ALARM_SOUND_SECONDS)
+else
+ALARM_SOUND_SECONDS_FLAG =
+endif
+
+ALARM_FLAGS =	$(SNOOZE_MINUTES_FLAG) \
+		$(MAX_SNOOZE_COUNT_FLAG) \
+		$(ALARM_SOUND_SECONDS_FLAG)
+
 # This makes the implicit .c.o rule work.
 CC := $(AVR_CC)
 
@@ -47,6 +68,7 @@ QPN_INCDIR ?= qp-nano/include
 EXTRA_LINK_FLAGS = -Wl,-Map,$(PROGRAMMAPFILE),--cref
 TARGET_MCU = atmega328p
 CFLAGS  = -c -gdwarf-2 -std=gnu99 -Os -fsigned-char -fshort-enums \
+	$(ALARM_FLAGS) \
 	-Wno-attributes \
 	-mmcu=$(TARGET_MCU) -Wall -Werror -o$@ \
 	-I$(QPN_INCDIR) -I. \
