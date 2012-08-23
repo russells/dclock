@@ -103,6 +103,17 @@ enum DClockSignals {
 	ALARM_OFF_SIGNAL,
 
 	/**
+	 * The alarm has started running.
+	 */
+	ALARM_RUNNING_SIGNAL,
+	/**
+	 * The alarm has stopped running.  This is sent to TimeDisplay to
+	 * inform it, and also from Alarm to itself to enable the transition to
+	 * alarm stopped.
+	 */
+	ALARM_STOPPED_SIGNAL,
+
+	/**
 	 * Sent by the alarm to itself to stop the alarm and go into snooze (or
 	 * off) state.
 	 */

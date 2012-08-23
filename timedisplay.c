@@ -4,6 +4,7 @@
 #include "alarm.h"
 #include "lcd.h"
 #include "dclock.h"
+#include "serial.h"
 #include <stdio.h>
 
 
@@ -15,6 +16,9 @@ static QState top                  (struct TimeDisplay *me);
 static QState normal               (struct TimeDisplay *me);
 static QState decimal              (struct TimeDisplay *me);
 static QState setting              (struct TimeDisplay *me);
+static QState alarming             (struct TimeDisplay *me);
+static QState alarming1            (struct TimeDisplay *me);
+static QState alarming2            (struct TimeDisplay *me);
 
 
 struct TimeDisplay timedisplay;
@@ -119,7 +123,7 @@ static void displayNormalTime(struct TimeDisplay *me, struct NormalTime nt)
  * @param move -1 = don't move, 0 = move with hours, 1 = move with minutes, 2 =
  * move with seconds.
  */
-static void displayBottomString(const char *s, uint8_t n, int8_t move)
+static void displayMovingBottomString(const char *s, uint8_t n, int8_t move)
 {
 	uint8_t times[3];
 	uint8_t spaces;
@@ -159,11 +163,11 @@ static void displayStatus(struct TimeDisplay *me)
 	/* Step through the list of statuses from highest to lowest priority,
 	   showing the first one that's active. */
 	if (me->statuses & DSTAT_ALARM_RUNNING) {
-		displayBottomString("** ALARM **", 11, 2);
+		displayMovingBottomString("** ALARM **", 11, 2);
 	} else if (me->statuses & DSTAT_SNOOZE) {
-		displayBottomString("Zzz..", 5, 2);
+		displayMovingBottomString("Zzz..", 5, 2);
 	} else if (me->statuses & DSTAT_ALARM) {
-		displayBottomString("A", 1, 1);
+		displayMovingBottomString("A", 1, 1);
 	} else {
 		LCD_LINE2_ROM("                ");
 	}
@@ -185,6 +189,20 @@ void display_status_off(enum DisplayStatus ds)
 }
 
 
+static QStateHandler getModeState(struct TimeDisplay *me)
+{
+	switch (me->mode) {
+	default:
+		Q_ASSERT( 0 );
+		/*FALLTHROUGH*/
+	case NORMAL_MODE:
+		return (QStateHandler)(&normal);
+	case DECIMAL_MODE:
+		return (QStateHandler)(&decimal);
+	}
+}
+
+
 static QState top(struct TimeDisplay *me)
 {
 	switch(Q_SIG(me)) {
@@ -198,6 +216,15 @@ static QState top(struct TimeDisplay *me)
 		return Q_TRAN(decimal);
 	case SETTING_TIME_SIGNAL:
 		return Q_TRAN(setting);
+	case ALARM_ON_SIGNAL:
+		display_status_on(DSTAT_ALARM);
+		return Q_TRAN(getModeState(me));
+	case ALARM_OFF_SIGNAL:
+		display_status_off(DSTAT_ALARM);
+		return Q_TRAN(getModeState(me));
+	case ALARM_RUNNING_SIGNAL:
+		SERIALSTR("timedisplay ALARM_RUNNING_SIGNAL\r\n");
+		return Q_TRAN(alarming1);
 	}
 	return Q_SUPER(QHsm_top);
 }
@@ -252,12 +279,73 @@ static QState setting(struct TimeDisplay *me)
 	case TICK_NORMAL_SIGNAL:
 		return Q_HANDLED();
 	case SETTING_TIME_FINISHED_SIGNAL:
-		switch (me->mode) {
-		case NORMAL_MODE:
-			return Q_TRAN(normal);
-		case DECIMAL_MODE:
-			return Q_TRAN(decimal);
-		}
+		return Q_TRAN(getModeState(me));
 	}
 	return Q_SUPER(top);
+}
+
+
+static QState alarming(struct TimeDisplay *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		me->preAlarmBrightness = lcd_get_brightness();
+		switch (me->preAlarmBrightness) {
+		case 4:
+			me->onBrightness = 4;
+			me->offBrightness = 3;
+			break;
+		case 0:
+			me->onBrightness = 2;
+			me->offBrightness = 1;
+			break;
+		default:
+			me->onBrightness = me->preAlarmBrightness + 1;
+			me->offBrightness = me->preAlarmBrightness;
+			break;
+		}
+		display_status_on(DSTAT_ALARM_RUNNING);
+		return Q_HANDLED();
+	case ALARM_STOPPED_SIGNAL:
+		SERIALSTR("timedisplay ALARM_STOPPED_SIGNAL\r\n");
+		return Q_TRAN(getModeState(me));
+	case Q_EXIT_SIG:
+		lcd_set_brightness(me->preAlarmBrightness);
+		display_status_off(DSTAT_ALARM_RUNNING);
+		return Q_HANDLED();
+	}
+	return Q_SUPER(getModeState(me));
+}
+
+
+#define ON_OFF_TIME 20
+
+
+static QState alarming1(struct TimeDisplay *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		//SERIALSTR("<1>");
+		QActive_arm((QActive*)me, ON_OFF_TIME);
+		lcd_set_brightness(me->onBrightness);
+		return Q_HANDLED();
+	case Q_TIMEOUT_SIG:
+		return Q_TRAN(alarming2);
+	}
+	return Q_SUPER(alarming);
+}
+
+
+static QState alarming2(struct TimeDisplay *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		//SERIALSTR("<2>");
+		QActive_arm((QActive*)me, ON_OFF_TIME);
+		lcd_set_brightness(me->offBrightness);
+		return Q_HANDLED();
+	case Q_TIMEOUT_SIG:
+		return Q_TRAN(alarming1);
+	}
+	return Q_SUPER(alarming);
 }

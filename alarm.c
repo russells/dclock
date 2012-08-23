@@ -23,8 +23,6 @@ static QState onNormalState(struct Alarm *me);
 static QState offState(struct Alarm *me);
 static QState alarmButtonsState(struct Alarm *me);
 static QState alarmedState(struct Alarm *me);
-static QState alarmedOnState(struct Alarm *me);
-static QState alarmedOffState(struct Alarm *me);
 static QState snoozeState(struct Alarm *me);
 static QState snoozeNormalState(struct Alarm *me);
 static QState snoozeDecimalState(struct Alarm *me);
@@ -203,12 +201,11 @@ static QState onState(struct Alarm *me)
 		me->decimalSnoozeTime = me->decimalAlarmTime;
 		me->normalSnoozeTime = me->normalAlarmTime;
 		me->snoozeCount = 0;
-		display_status_on(DSTAT_ALARM);
+		post((&timedisplay), ALARM_ON_SIGNAL, 0);
 		return Q_HANDLED();
 	case ALARM_ON_SIGNAL:
 		return Q_HANDLED();
 	case Q_EXIT_SIG:
-		display_status_off(DSTAT_ALARM);
 		return Q_HANDLED();
 	}
 	return Q_SUPER(topState);
@@ -228,7 +225,7 @@ static QState onDecimalState(struct Alarm *me)
 	case TICK_DECIMAL_SIGNAL:
 		thetime = Q_PAR(me);
 		if (thetime == me->decimalAlarmTime) {
-			return Q_TRAN(alarmedOnState);
+			return Q_TRAN(alarmedState);
 		} else {
 			return Q_HANDLED();
 		}
@@ -252,7 +249,7 @@ static QState onNormalState(struct Alarm *me)
 		if (thetimep->s == me->normalAlarmTime.s
 		    && thetimep->m == me->normalAlarmTime.m
 		    && thetimep->h == me->normalAlarmTime.h) {
-			return Q_TRAN(alarmedOnState);
+			return Q_TRAN(alarmedState);
 		} else {
 			return Q_HANDLED();
 		}
@@ -266,6 +263,7 @@ static QState offState(struct Alarm *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		me->armed = 0;
+		post((&timedisplay), ALARM_OFF_SIGNAL, 0);
 		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:
 		return Q_HANDLED();
@@ -302,34 +300,19 @@ static QState alarmedState(struct Alarm *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("Alarm\r\n");
-		QActive_arm((QActive*)me, 100);
+		QActive_arm((QActive*)me, ALARM_SOUND_COUNT);
 		me->turnOff = 0;
 		me->alarmSoundCount = 0;
-		me->enterBrightness = lcd_get_brightness();
-		switch (me->enterBrightness) {
-		case 4:
-			me->onBrightness = 4;
-			me->offBrightness = 3;
-			break;
-		case 0:
-			me->onBrightness = 2;
-			me->offBrightness = 1;
-			break;
-		default:
-			me->onBrightness = me->enterBrightness + 1;
-			me->offBrightness = me->enterBrightness;
-			break;
-		}
-		display_status_on(DSTAT_ALARM_RUNNING);
+		post((&timedisplay), ALARM_RUNNING_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_SELECT_PRESS_SIGNAL:
 		/* We want the alarm to stop sounding as soon as a button is
 		   pressed, but at that stage we haven't decided whether to
-		   snooze or turn off.  So transition back here and wait for
-		   long presses or button up events. */
-		return Q_TRAN(alarmedState); /* This state. */
+		   snooze or turn off. */
+		post((&timedisplay), ALARM_STOPPED_SIGNAL, 0);
+		return Q_HANDLED();
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
 	case BUTTON_SELECT_REPEAT_SIGNAL:
 		/* The way to turn off the alarm (rather than snoozing) is to
@@ -341,6 +324,7 @@ static QState alarmedState(struct Alarm *me)
 		    long enough to turn off the alarm.  A sleepy user needs
 		    this feedback. */
 		me->turnOff = 73;
+		post((&timedisplay), ALARM_STOPPED_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_UP_RELEASE_SIGNAL:
 	case BUTTON_DOWN_RELEASE_SIGNAL:
@@ -348,9 +332,15 @@ static QState alarmedState(struct Alarm *me)
 		/* If the alarm is snoozed by the user, start counting snooze
 		   periods again. */
 		me->snoozeCount = 0;
-		post(me, ALARM_SOUND_OFF_SIGNAL, 0);
+		post(me, ALARM_STOPPED_SIGNAL, 0);
 		return Q_HANDLED();
-	case ALARM_SOUND_OFF_SIGNAL:
+
+	case Q_TIMEOUT_SIG:
+		post((&timedisplay), ALARM_STOPPED_SIGNAL, 0);
+		post(me, ALARM_STOPPED_SIGNAL, 0);
+		return Q_HANDLED();
+
+	case ALARM_STOPPED_SIGNAL:
 		if (me->turnOff) {
 			/* me->turnOff will only be true in response to a long
 			   press of the select button. */
@@ -371,48 +361,13 @@ static QState alarmedState(struct Alarm *me)
 				Q_ASSERT( 0 );
 			}
 		}
+		/* There needs to be a return or Q_ASSERT() in every branch of
+		   the ifs before we get here in this switch case. */
 	case Q_EXIT_SIG:
 		SERIALSTR("Alarm stopped\r\n");
-		lcd_set_brightness(me->enterBrightness);
-		display_status_off(DSTAT_ALARM_RUNNING);
 		return Q_HANDLED();
 	}
 	return Q_SUPER(alarmButtonsState);
-}
-
-
-#define ON_OFF_TIME 20
-
-static QState alarmedOnState(struct Alarm *me)
-{
-	switch (Q_SIG(me)) {
-	case Q_ENTRY_SIG:
-		QActive_arm((QActive*)me, ON_OFF_TIME);
-		lcd_set_brightness(me->onBrightness);
-		return Q_HANDLED();
-	case Q_TIMEOUT_SIG:
-		me->alarmSoundCount += ON_OFF_TIME;
-		return Q_TRAN(alarmedOffState);
-	}
-	return Q_SUPER(alarmedState);
-}
-
-
-static QState alarmedOffState(struct Alarm *me)
-{
-	switch (Q_SIG(me)) {
-	case Q_ENTRY_SIG:
-		QActive_arm((QActive*)me, ON_OFF_TIME);
-		lcd_set_brightness(me->offBrightness);
-		return Q_HANDLED();
-	case Q_TIMEOUT_SIG:
-		me->alarmSoundCount += ON_OFF_TIME;
-		if (me->alarmSoundCount >= ALARM_SOUND_COUNT) {
-			post(me, ALARM_SOUND_OFF_SIGNAL, 0);
-		}
-		return Q_TRAN(alarmedOnState);
-	}
-	return Q_SUPER(alarmedState);
 }
 
 
@@ -475,7 +430,7 @@ static QState snoozeNormalState(struct Alarm *me)
 		if (thetimep->s == me->normalSnoozeTime.s
 		    && thetimep->m == me->normalSnoozeTime.m
 		    && thetimep->h == me->normalSnoozeTime.h) {
-			return Q_TRAN(alarmedOnState);
+			return Q_TRAN(alarmedState);
 		} else {
 			return Q_HANDLED();
 		}
@@ -492,7 +447,7 @@ static QState snoozeDecimalState(struct Alarm *me)
 	case TICK_DECIMAL_SIGNAL:
 		thetime = Q_PAR(me);
 		if (thetime == me->decimalSnoozeTime) {
-			return Q_TRAN(alarmedOnState);
+			return Q_TRAN(alarmedState);
 		} else {
 			return Q_HANDLED();
 		}

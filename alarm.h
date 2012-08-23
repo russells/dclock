@@ -14,12 +14,6 @@ struct Alarm {
 	uint8_t snoozeCount;
 	uint8_t turnOff;
 	uint8_t armed;
-	/** The LCD brightness when we turned on the alarm. */
-	uint8_t enterBrightness;
-	/** The brighter brightness when we flash the display. */
-	uint8_t onBrightness;
-	/** The duller brightness when we flash the display. */
-	uint8_t offBrightness;
 	/** Set true when we are able to receive signals. */
 	uint8_t ready;
 };

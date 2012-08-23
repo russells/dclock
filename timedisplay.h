@@ -8,6 +8,13 @@ struct TimeDisplay {
 	uint8_t mode;
 	uint8_t statuses;
 	uint8_t ready;
+
+	/** The LCD brightness when the alarm started running. */
+	uint8_t preAlarmBrightness;
+	/** The brighter brightness when we flash the display. */
+	uint8_t onBrightness;
+	/** The duller brightness when we flash the display. */
+	uint8_t offBrightness;
 };
 
 extern struct TimeDisplay timedisplay;

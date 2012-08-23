@@ -54,3 +54,15 @@ This confirms that the seconds part of the alarm time is forced to zero.
 
 Note that the time should stable at 36 minute normal intervals, or 25
 minute decimal intervals.
+
+* Terminology
+** Alarm on
+The alarm is enabled, so that when the current time matches the alarm time,
+the alarm will start running.
+** Alarm off
+The alarm is not enabled.
+** Alarm running
+The current time has matched the alarm time and the alarm is making sound
+and light.
+** Alarm stopped
+The alarm is not making sound and light, and may be on or off.
