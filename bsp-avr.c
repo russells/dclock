@@ -18,6 +18,7 @@ Q_DEFINE_THIS_FILE;
 static void timer1_init(void);
 static void buttons_init(void);
 static void int0_init(void);
+static void leds_init(void);
 
 
 void BSP_QF_onStartup(void)
@@ -110,6 +111,55 @@ void BSP_init(void)
 	WDTCSR |= (1 << WDIE);
 	/* Make the Arduino LED pin (D13) an output. */
 	DDRB |= (1 << 5);
+
+	/* Initialise the LEDs early, to make sure they're off after the power
+	   comes on. */
+	leds_init();
+}
+
+
+static void
+leds_init(void)
+{
+	static uint8_t leds0[] = {0,0,0,0,0,0};
+
+	DDRC |= (1 << 1);
+	DDRC |= (1 << 2);
+	PORTC &= ~ (1 << 1);
+	PORTC &= ~ (1 << 2);
+	/* Make sure the LEDs are off. */
+	BSP_leds(leds0);
+}
+
+
+void BSP_leds(uint8_t *data)
+{
+	for (uint8_t i=0; i<6; i++) {
+		uint8_t d = data[i];
+		for (uint8_t j=0; j<8; j++) {
+			/* This lowers the clock line to the LED drivers.
+			   Putting this first in the loop lengthens the clock
+			   cycle, as it lowers the clock line after the left
+			   shift and the end of loop arithmetic. */
+			PORTC &= ~ (1 << 1);
+			if (d & 0x80) {
+				PORTC |= (1 << 2);
+			} else {
+				PORTC &= ~ (1 << 2);
+			}
+			/* Put the next data bit into the high bit of d.  Doing
+			   this before we raise the clock increases the data
+			   setup time. */
+			d <<= 1;
+			/* Raise the clock line. */
+			PORTC |= (1 << 1);
+		}
+	}
+	/* Leave the clock line low. */
+	PORTC &= ~ (1 << 1);
+	/* The LED driver chip requires 500us idle time before it uses the
+	   clocked in data to set the LED brightness.  We assume that we don't
+	   come back here in that time, and don't worry about a 500us delay. */
 }
 
 
@@ -147,16 +197,20 @@ SIGNAL(INT0_vect)
  * Timer calculations: CLKio==16MHz.  Then CLKio/8 == 2MHz.  Divide that by
  * 62500 == 32Hz.  Multiply that by 0.864 to give 32 periods in a decimal
  * second == 54000.
+ *
+ * A secondary function of Timer 1 is producing the buzzer sound.  Normally
+ * OC1B is disconnected, but we connect it to its output pin to make the sound.
  */
 static void
 timer1_init(void)
 {
 	cli();
 
+	DDRB &= ~(1 << 2);	/* OC1B input */
 	TCCR1A =(0 << COM1A1) |
 		(0 << COM1A0) |	/* OC1A disconnected */
 		(0 << COM1B1) |
-		(0 << COM1B0) |	/* OC1B disconnected */
+		(1 << COM1B0) |	/* OC1B toggle on compare match */
 		(0 << WGM11 ) |	/* CTC, 4, count to OCR1A */
 		(0 << WGM10);	/* CTC */
 	TCCR1B =(0 << WGM13 ) |	/* CTC */
@@ -164,9 +218,23 @@ timer1_init(void)
 		(2 << CS10  );	/* CLKio/8 */
 	OCR1AH = 0xd2;		/* 0xd2f0 = 54000 */
 	OCR1AL = 0xf0;
+	OCR1BH = 0x69;		/* 0x6978 = 27000 */
+	OCR1BL = 0x78;
 	TIMSK1 =(1 << OCIE1A);
 
 	sei();
+}
+
+
+void BSP_buzzer_on(void)
+{
+	DDRB |= (1 << 2);
+}
+
+
+void BSP_buzzer_off(void)
+{
+	DDRB &= ~ (1 << 2);
 }
 
 

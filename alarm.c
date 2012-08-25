@@ -5,6 +5,7 @@
 #include "timedisplay.h"
 #include "dclock.h"
 #include "lcd.h"
+#include "bsp.h"
 
 #include <stdio.h>
 
@@ -23,6 +24,7 @@ static QState onNormalState(struct Alarm *me);
 static QState offState(struct Alarm *me);
 static QState alarmButtonsState(struct Alarm *me);
 static QState alarmedState(struct Alarm *me);
+static QState alarmTurningOffNowState(struct Alarm *me);
 static QState snoozeState(struct Alarm *me);
 static QState snoozeNormalState(struct Alarm *me);
 static QState snoozeDecimalState(struct Alarm *me);
@@ -300,7 +302,8 @@ static QState alarmedState(struct Alarm *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		SERIALSTR("Alarm\r\n");
-		QActive_arm((QActive*)me, ALARM_SOUND_COUNT);
+		QActive_arm_sig((QActive*)me, ALARM_SOUND_COUNT,
+				ALARM_RUNNING_TIMEOUT_SIGNAL);
 		me->turnOff = 0;
 		me->alarmSoundCount = 0;
 		post((&timedisplay), ALARM_RUNNING_SIGNAL, 0);
@@ -314,18 +317,20 @@ static QState alarmedState(struct Alarm *me)
 		post((&timedisplay), ALARM_STOPPED_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_SELECT_LONG_PRESS_SIGNAL:
+		return Q_HANDLED();
 	case BUTTON_SELECT_REPEAT_SIGNAL:
 		/* The way to turn off the alarm (rather than snoozing) is to
-		   hold down the select button for a long press time. */
-		/** @todo Is a long press time enough to turn off the alarm?
-		    Should we count a longer time by counting select repeat
-		    signals? */
-		/** @todo Make a noise when the select button has been pressed
-		    long enough to turn off the alarm.  A sleepy user needs
-		    this feedback. */
+		   hold down the select button for a long press time and one
+		   repeat. */
+		/** A long press and one repeat is 48 ticks, at 37 Hz that's
+		    about 1.3 seconds.  That's a convenient period, only
+		    because it means that we only have to handle the first
+		    repeat signal.  If a different period is required, we would
+		    have to use another timer signal, count repeats, or use the
+		    long press signal (which gives 30 ticks.) */
 		me->turnOff = 73;
 		post((&timedisplay), ALARM_STOPPED_SIGNAL, 0);
-		return Q_HANDLED();
+		return Q_TRAN(alarmTurningOffNowState);
 	case BUTTON_UP_RELEASE_SIGNAL:
 	case BUTTON_DOWN_RELEASE_SIGNAL:
 	case BUTTON_SELECT_RELEASE_SIGNAL:
@@ -335,7 +340,7 @@ static QState alarmedState(struct Alarm *me)
 		post(me, ALARM_STOPPED_SIGNAL, 0);
 		return Q_HANDLED();
 
-	case Q_TIMEOUT_SIG:
+	case ALARM_RUNNING_TIMEOUT_SIGNAL:
 		post((&timedisplay), ALARM_STOPPED_SIGNAL, 0);
 		post(me, ALARM_STOPPED_SIGNAL, 0);
 		return Q_HANDLED();
@@ -368,6 +373,46 @@ static QState alarmedState(struct Alarm *me)
 		return Q_HANDLED();
 	}
 	return Q_SUPER(alarmButtonsState);
+}
+
+
+static QState alarmTurningOffNowState(struct Alarm *me)
+{
+	switch (Q_SIG(me)) {
+	case Q_ENTRY_SIG:
+		QActive_arm_sig((QActive*)me, 1, ALARM_BEEP_TIMEOUT_SIGNAL);
+		BSP_buzzer_on();
+		return Q_HANDLED();
+	case ALARM_BEEP_TIMEOUT_SIGNAL:
+		/* Don't transition back to the parent on our timeout signal,
+		   because that will result in coming back here at the next
+		   button repeat, and making the buzzer make short beeps
+		   continuously.  Instead, we turn the buzzer off, and let the
+		   parent state handle all the events it wants. */
+		BSP_buzzer_off();
+		return Q_HANDLED();
+	case BUTTON_SELECT_REPEAT_SIGNAL:
+		/* We have to ignore this signal, as well, since the parent
+		   state responds to it with a transition here, which would
+		   mean an exit action and an entry action for this state, and
+		   continous short beeps. */
+		return Q_HANDLED();
+	case ALARM_RUNNING_TIMEOUT_SIGNAL:
+		/* Our parent state arms the timer with this signal.  It could
+		   be in the queue when we get here, and we don't want it to be
+		   handled, so ignore it.  If we've got here, the user has held
+		   down the select butotn, and we'll leave when that button is
+		   released, so we don't need the parent's timeout signal any
+		   more. */
+		return Q_HANDLED();
+	case Q_EXIT_SIG:
+		/* If the user lifts the select button before we've done the
+		   timeout in this state, the buzzer will still be on.  So
+		   ensure the buzzer is turned off before we leave here. */
+		BSP_buzzer_off();
+		return Q_HANDLED();
+	}
+	return Q_SUPER(alarmedState);
 }
 
 

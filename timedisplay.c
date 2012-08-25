@@ -5,7 +5,9 @@
 #include "lcd.h"
 #include "dclock.h"
 #include "serial.h"
+#include "bsp.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 
 Q_DEFINE_THIS_FILE;
@@ -19,6 +21,10 @@ static QState setting              (struct TimeDisplay *me);
 static QState alarming             (struct TimeDisplay *me);
 static QState alarming1            (struct TimeDisplay *me);
 static QState alarming2            (struct TimeDisplay *me);
+
+
+static void lights_on(uint8_t num);
+static void lights_off(void);
 
 
 struct TimeDisplay timedisplay;
@@ -312,6 +318,8 @@ static QState alarming(struct TimeDisplay *me)
 	case Q_EXIT_SIG:
 		lcd_set_brightness(me->preAlarmBrightness);
 		display_status_off(DSTAT_ALARM_RUNNING);
+		lights_off();
+		BSP_buzzer_off();
 		return Q_HANDLED();
 	}
 	return Q_SUPER(getModeState(me));
@@ -328,6 +336,8 @@ static QState alarming1(struct TimeDisplay *me)
 		//SERIALSTR("<1>");
 		QActive_arm((QActive*)me, ON_OFF_TIME);
 		lcd_set_brightness(me->onBrightness);
+		lights_off();
+		BSP_buzzer_off();
 		return Q_HANDLED();
 	case Q_TIMEOUT_SIG:
 		return Q_TRAN(alarming2);
@@ -341,11 +351,87 @@ static QState alarming2(struct TimeDisplay *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		//SERIALSTR("<2>");
-		QActive_arm((QActive*)me, ON_OFF_TIME);
+		QActive_arm((QActive*)me, 1);
 		lcd_set_brightness(me->offBrightness);
+		lights_on(0);
+		BSP_buzzer_on();
+		me->onOffTime = 0;
 		return Q_HANDLED();
 	case Q_TIMEOUT_SIG:
-		return Q_TRAN(alarming1);
+		me->onOffTime ++;
+		if (me->onOffTime >= ON_OFF_TIME) {
+			return Q_TRAN(alarming1);
+		} else {
+			QActive_arm((QActive*)me, 1);
+			lights_on(me->onOffTime);
+			return Q_HANDLED();
+		}
 	}
 	return Q_SUPER(alarming);
+}
+
+
+static uint8_t rgb[6];
+
+
+static void lights_on(uint8_t num)
+{
+	uint16_t colorselector;
+
+	/* Give each LED a 25% chance of being turned off in this cycle.
+	   Without something like this, the LEDs combine to give a largely
+	   white colour. */
+	colorselector = (uint16_t) random();
+	if (colorselector & 0b000000000011) {
+		rgb[0] = 0;
+	} else {
+		rgb[0] = (uint8_t) random();
+	}
+	if (colorselector & 0b000000001100) {
+		rgb[1] = 0;
+	} else {
+		rgb[1] = (uint8_t) random();
+	}
+	if (colorselector & 0b000000110000) {
+		rgb[2] = 0;
+	} else {
+		rgb[2] = (uint8_t) random();
+	}
+	if (colorselector & 0b000011000000) {
+		rgb[3] = 0;
+	} else {
+		rgb[3] = (uint8_t) random();
+	}
+	if (colorselector & 0b001100000000) {
+		rgb[4] = 0;
+	} else {
+		rgb[4] = (uint8_t) random();
+	}
+	if (colorselector & 0b110000000000) {
+		rgb[5] = 0;
+	} else {
+		rgb[5] = (uint8_t) random();
+	}
+	/* Every second time, halve the brightness to make the LEDs flash
+	   more. */
+	if (num & 0x1) {
+		for (uint8_t i=0; i<6; i++) {
+			if (rgb[i] < 128) {
+				rgb[i] >>= 1;
+			}
+		}
+	}
+	BSP_leds(rgb);
+}
+
+
+static void lights_off(void)
+{
+	rgb[0] = 0;
+	rgb[1] = 0;
+	rgb[2] = 0;
+	rgb[3] = 0;
+	rgb[4] = 0;
+	rgb[5] = 0;
+	BSP_leds(rgb);
 }

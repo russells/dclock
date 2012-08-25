@@ -15,6 +15,8 @@ struct TimeDisplay {
 	uint8_t onBrightness;
 	/** The duller brightness when we flash the display. */
 	uint8_t offBrightness;
+	/** Count of light changes. */
+	uint8_t onOffTime;
 };
 
 extern struct TimeDisplay timedisplay;

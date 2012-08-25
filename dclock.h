@@ -114,6 +114,16 @@ enum DClockSignals {
 	ALARM_STOPPED_SIGNAL,
 
 	/**
+	 * The alarm has been running for long enough, and it will now snooze
+	 * or turn off.
+	 */
+	ALARM_RUNNING_TIMEOUT_SIGNAL,
+	/**
+	 * Length of the short beep when the user turns off the alarm.
+	 */
+	ALARM_BEEP_TIMEOUT_SIGNAL,
+
+	/**
 	 * Sent by the alarm to itself to stop the alarm and go into snooze (or
 	 * off) state.
 	 */
