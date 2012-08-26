@@ -296,14 +296,15 @@ tkSetTimeState(struct Timekeeper *me)
 		status = me->twiRequest0.status;
 		switch (status) {
 		case 0xf8:
-			SERIALSTR("tkSetTimeState: TWI_REPLY_0_SIGNAL\r\n");
-			return Q_HANDLED();
+			SERIALSTR("tkSetTimeState: success\r\n");
+			break;
 		default:
 			SERIALSTR("tkSetTimeState: TWI_REPLY_0_SIGNAL: ");
 			serial_send_rom(twi_status_string(status));
 			SERIALSTR("\r\n");
-			return Q_TRAN(runningState);
+			break;
 		}
+		return Q_TRAN(runningState);
 
 	case Q_EXIT_SIG:
 		SERIALSTR("tkSetTimeState exits\r\n");
