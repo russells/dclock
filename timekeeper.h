@@ -4,6 +4,7 @@
 #include "qpn_port.h"
 #include "twi.h"
 #include "time.h"
+#include "alarm.h"
 
 
 struct Timekeeper {
@@ -14,6 +15,9 @@ struct Timekeeper {
 
 	/** The normal time, as hours, minutes, and seconds. */
 	struct NormalTime normaltime;
+
+	/** The alarm time, only used when we set the alarm time. */
+	struct NormalTime normalalarmtime;
 
 	/** Set to zero every 108 normal seconds, for synchronisation. */
 	uint8_t normal108Count;
@@ -52,5 +56,7 @@ uint32_t get_decimal_time(void);
 struct NormalTime get_normal_time(void);
 void get_times(uint8_t *dtimes);
 void set_times(uint8_t *dtimes);
+
+void set_alarm_times(struct Timekeeper *me, uint8_t *dtimes, uint8_t on);
 
 #endif

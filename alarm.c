@@ -3,6 +3,7 @@
 #include "serial.h"
 #include "timesetter.h"
 #include "timedisplay.h"
+#include "timekeeper.h"
 #include "dclock.h"
 #include "lcd.h"
 #include "bsp.h"
@@ -69,44 +70,29 @@ void get_alarm_times(struct Alarm *me, uint8_t *times)
 }
 
 
-void set_alarm_times(struct Alarm *me, uint8_t *times)
+void set_decimal_alarm_time(struct Alarm *me, uint32_t at)
 {
-	switch (get_time_mode()) {
-	case DECIMAL_MODE:
-		/* These three values are all unsigned and can all be zero, so
-		   we don't need to check the lower bound. */
-		Q_ASSERT( times[0] <= 9 );
-		Q_ASSERT( times[1] <= 99 );
-		Q_ASSERT( times[2] == 0 );
-		me->decimalAlarmTime = (times[0] * 10000L)
-			+ (times[1] * 100L) + times[2];
-		me->normalAlarmTime = decimal_to_normal(me->decimalAlarmTime);
-		SERIALSTR("alarm time: ");
-		print_decimal_time(me->decimalAlarmTime);
-		SERIALSTR(" (");
-		print_normal_time(me->normalAlarmTime);
-		SERIALSTR(")\r\n");
-		break;
-	case NORMAL_MODE:
-		Q_ASSERT( times[0] <= 23 );
-		Q_ASSERT( times[1] <= 59 );
-		Q_ASSERT( times[2] == 0 );
-		me->normalAlarmTime.h = times[0];
-		me->normalAlarmTime.m = times[1];
-		me->normalAlarmTime.s = times[2];
-		me->normalAlarmTime.pad = 0;
-		me->decimalAlarmTime = normal_to_decimal(me->normalAlarmTime);
-		SERIALSTR("alarm time: ");
-		print_normal_time(me->normalAlarmTime);
-		SERIALSTR(" (");
-		print_decimal_time(me->decimalAlarmTime);
-		SERIALSTR(")\r\n");
-		break;
-	default:
-		Q_ASSERT( 0 );
-	}
-	me->decimalSnoozeTime = me->decimalAlarmTime;
-	me->normalSnoozeTime = me->normalAlarmTime;
+	me->decimalAlarmTime = at;
+	me->decimalSnoozeTime = at;
+}
+
+
+void set_normal_alarm_time(struct Alarm *me, struct NormalTime nt)
+{
+	me->normalAlarmTime = nt;
+	me->normalSnoozeTime = nt;
+}
+
+
+uint32_t get_decimal_alarm_time(struct Alarm *me)
+{
+	return me->decimalAlarmTime;
+}
+
+
+struct NormalTime get_normal_alarm_time(struct Alarm *me)
+{
+	return me->normalAlarmTime;
 }
 
 
@@ -266,6 +252,8 @@ static QState offState(struct Alarm *me)
 	case Q_ENTRY_SIG:
 		me->armed = 0;
 		post((&timedisplay), ALARM_OFF_SIGNAL, 0);
+		post((&timekeeper), SET_NORMAL_ALARM_SIGNAL,
+		     nt2it(me->normalAlarmTime));
 		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:
 		return Q_HANDLED();
@@ -401,7 +389,7 @@ static QState alarmTurningOffNowState(struct Alarm *me)
 		/* Our parent state arms the timer with this signal.  It could
 		   be in the queue when we get here, and we don't want it to be
 		   handled, so ignore it.  If we've got here, the user has held
-		   down the select butotn, and we'll leave when that button is
+		   down the select button, and we'll leave when that button is
 		   released, so we don't need the parent's timeout signal any
 		   more. */
 		return Q_HANDLED();

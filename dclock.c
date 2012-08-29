@@ -30,14 +30,29 @@ static QEvent timedisplayQueue[4];
    priority, but also because it determines the order in which they are
    initialised.  For instance, timekeeper sends a signal to twi when dclock
    starts, so twi much be initialised first by placing it earlier in this
-   list. */
+   list.
+
+   A note about priorities: later listed AOs have a higher priority.  If there
+   are any queued events for higher priority AOs, they get dispatched first,
+   and lower priority AOs don't have their events dispatched until the higher
+   priority AOs event queues are empty.
+
+   In our case, the most important relative priority here is that alarm must be
+   higher priority than timekeeper.  When the alarm is turned off, both alarm
+   and timekeeper have events dispatched for that.  But timekeeper asks alarm
+   its alarm state before writing to the RTC, and if alarm's event has not been
+   processed yet it will get the wrong answer.  So make sure alarm's queue is
+   processed before timekeeper's.
+
+   Yes, this is weird and fragile, and should be fixed.
+ */
 QActiveCB const Q_ROM Q_ROM_VAR QF_active[] = {
 	{ (QActive *)0              , (QEvent *)0      , 0                        },
 	{ (QActive *)(&twi)         , twiQueue         , Q_DIM(twiQueue)          },
 	{ (QActive *)(&timedisplay) , timedisplayQueue , Q_DIM(timedisplayQueue)  },
 	{ (QActive *)(&buttons)     , buttonsQueue     , Q_DIM(buttonsQueue)      },
-	{ (QActive *)(&alarm)       , alarmQueue       , Q_DIM(alarmQueue)        },
 	{ (QActive *)(&timekeeper)  , timekeeperQueue  , Q_DIM(timekeeperQueue)   },
+	{ (QActive *)(&alarm)       , alarmQueue       , Q_DIM(alarmQueue)        },
 	{ (QActive *)(&timesetter)  , timesetterQueue  , Q_DIM(timesetterQueue)   },
 };
 /* If QF_MAX_ACTIVE is incorrectly defined, the compiler says something like:

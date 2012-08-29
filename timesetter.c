@@ -409,6 +409,7 @@ static QState setAlarmOnOffState(struct TimeSetter *me)
 			/* The user wants the alarm off.  If that's a new
 			   setting, then tell the alarm to go off. */
 			if (me->timeSetChanged) {
+				set_alarm_times(&timekeeper, me->setTime, 0);
 				post(&alarm, ALARM_OFF_SIGNAL, 0);
 			}
 			return Q_TRAN(setState);
@@ -434,14 +435,7 @@ static QState setAlarmState(struct TimeSetter *me)
 	case Q_EXIT_SIG:
 		SERIALSTR("< setAlarmState ");
 		if (me->timeSetChanged) {
-			if (me->alarmOn) {
-				SERIALSTR("on\r\n");
-				post(&alarm, ALARM_ON_SIGNAL, 0);
-				set_alarm_times(&alarm, me->setTime);
-			} else {
-				SERIALSTR("off\r\n");
-				post(&alarm, ALARM_OFF_SIGNAL, 0);
-			}
+			set_alarm_times(&timekeeper, me->setTime, 1);
 		} else {
 			if (me->alarmOn) {
 				SERIALSTR("no change, on\r\n");

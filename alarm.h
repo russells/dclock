@@ -23,9 +23,13 @@ extern struct Alarm alarm;
 void alarm_ctor(void);
 
 void get_alarm_times(struct Alarm *me, uint8_t *dtimes);
-void set_alarm_times(struct Alarm *me, uint8_t *dtimes);
 
 uint8_t get_alarm_state(struct Alarm *me);
 void set_alarm_state(struct Alarm *me, uint8_t onoff);
+
+void set_decimal_alarm_time(struct Alarm *me, uint32_t at);
+void set_normal_alarm_time(struct Alarm *me, struct NormalTime nt);
+uint32_t get_decimal_alarm_time(struct Alarm *me);
+struct NormalTime get_normal_alarm_time(struct Alarm *me);
 
 #endif
