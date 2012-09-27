@@ -350,10 +350,10 @@ static QState tkSetAlarmState(struct Timekeeper *me)
 		me->twiBuffer0[7] = 0x00; /* Alarm 2 day */
 		if (get_alarm_state(&alarm)) {
 			SERIALSTR("   alarm is on\r\n");
-			me->twiBuffer0[8] = 0x81; /* /EOSC=1 A1IE=1 */
+			me->twiBuffer0[8] = 0x01; /* /EOSC=0 A1IE=1 */
 		} else {
 			SERIALSTR("   alarm is off\r\n");
-			me->twiBuffer0[8] = 0x80;
+			me->twiBuffer0[8] = 0x00;
 		}
 		me->twiRequest0.qactive = (QActive*)me;
 		me->twiRequest0.signal = TWI_REPLY_0_SIGNAL;
@@ -417,8 +417,8 @@ static uint8_t checkRTCdata(uint8_t *bytes)
 	if ((bytes[2] & 0x30) > 0x20) goto ret; else e++;
 
 	// A1IE is used for our own alarm purposes.
-	// EOSC /BBSQW /CONF /RS2 /RS1 /INTCN /A2IE ?A1IE
-	if ((bytes[14]& 0xfe) !=0x80) goto ret; else e++;
+	// /EOSC /BBSQW /CONF /RS2 /RS1 /INTCN /A2IE ?A1IE
+	if ((bytes[14]& 0xfe) !=0x00) goto ret; else e++;
 
 	/* @todo work out why we always get 0xC9 out of this register. */
 	// /OSF /BB32kHz /CRATE1 /CRATE0 /EN32kHz BSY? A2F? A1F?
@@ -488,7 +488,8 @@ static void setupRTCdata(uint8_t *bytes)
 	bytes[12] = 0;
 	bytes[13] = 0;
 
-	bytes[14] = 0x80;	/* EOSC etc */
+	bytes[14] = 0;		/* /EOSC etc.  /EOSC must be 0 to enable the
+				   oscillator on backup power. */
 	bytes[15] = 0;		/* OSF, BB32kHz etc */
 }
 
