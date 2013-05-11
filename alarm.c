@@ -368,8 +368,11 @@ static QState alarmTurningOffNowState(struct Alarm *me)
 {
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		QActive_arm_sig((QActive*)me, 1, ALARM_BEEP_TIMEOUT_SIGNAL);
-		BSP_buzzer_on();
+		/* We must arm this for two ticks instead of one, because of
+		   the way the timer interacts with the buzzer.  If we only arm
+		   for one tick, we get an almost inaudible short beep. */
+		QActive_arm_sig((QActive*)me, 2, ALARM_BEEP_TIMEOUT_SIGNAL);
+		BSP_buzzer_on(64);
 		return Q_HANDLED();
 	case ALARM_BEEP_TIMEOUT_SIGNAL:
 		/* Don't transition back to the parent on our timeout signal,

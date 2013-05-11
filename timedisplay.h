@@ -9,6 +9,8 @@ struct TimeDisplay {
 	uint8_t statuses;
 	uint8_t ready;
 
+	/** The alarm sound volume */
+	uint8_t volume;
 	/** The LCD brightness when the alarm started running. */
 	uint8_t preAlarmBrightness;
 	/** The brighter brightness when we flash the display. */

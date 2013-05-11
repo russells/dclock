@@ -311,6 +311,7 @@ static QState alarming(struct TimeDisplay *me)
 			break;
 		}
 		display_status_on(DSTAT_ALARM_RUNNING);
+		me->volume = 0;
 		return Q_HANDLED();
 	case ALARM_STOPPED_SIGNAL:
 		SERIALSTR("timedisplay ALARM_STOPPED_SIGNAL\r\n");
@@ -354,7 +355,17 @@ static QState alarming2(struct TimeDisplay *me)
 		QActive_arm((QActive*)me, 1);
 		lcd_set_brightness(me->offBrightness);
 		lights_on(0);
-		BSP_buzzer_on();
+		/* Slowly increase the volume. */
+		if (! me->volume) {
+			me->volume = 1;
+		} else if (me->volume < 16) {
+			me->volume <<= 1;
+		} else if (me->volume < 128) {
+			me->volume = (me->volume / 2) * 3;
+		} else {
+			me->volume = 255;
+		}
+		BSP_buzzer_on(me->volume);
 		me->onOffTime = 0;
 		return Q_HANDLED();
 	case Q_TIMEOUT_SIG:

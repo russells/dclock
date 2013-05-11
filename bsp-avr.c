@@ -209,25 +209,33 @@ timer1_init(void)
 	DDRB &= ~(1 << 2);	/* OC1B input */
 	TCCR1A =(0 << COM1A1) |
 		(0 << COM1A0) |	/* OC1A disconnected */
-		(0 << COM1B1) |
-		(1 << COM1B0) |	/* OC1B toggle on compare match */
-		(0 << WGM11 ) |	/* CTC, 4, count to OCR1A */
-		(0 << WGM10);	/* CTC */
-	TCCR1B =(0 << WGM13 ) |	/* CTC */
-		(1 << WGM12 ) |	/* CTC */
+		(1 << COM1B1) |
+		(0 << COM1B0) |	/* OC1B set at 0, cleared on compare match */
+		(1 << WGM11 ) |	/* Fast PWM, 15, count to OCR1A */
+		(1 << WGM10);	/* Fast PWM */
+	TCCR1B =(1 << WGM13 ) |	/* Fast PWM */
+		(1 << WGM12 ) |	/* Fast PWM */
 		(2 << CS10  );	/* CLKio/8 */
 	OCR1AH = 0xd2;		/* 0xd2f0 = 54000 */
 	OCR1AL = 0xf0;
-	OCR1BH = 0x69;		/* 0x6978 = 27000 */
-	OCR1BL = 0x78;
+	OCR1BH = 0;
+	OCR1BL = 1;
 	TIMSK1 =(1 << OCIE1A);
 
 	sei();
 }
 
 
-void BSP_buzzer_on(void)
+void BSP_buzzer_on(uint8_t volume)
 {
+	uint16_t ocr1b;
+
+	ocr1b = volume * 106;	/* When volume==255, this gives about 27000,
+				   which is half of the timer 1 count range.*/
+	QF_INT_LOCK();
+	OCR1BH = (ocr1b >> 8) & 0xff;
+	OCR1BL = ocr1b & 0xff;
+	QF_INT_UNLOCK();
 	DDRB |= (1 << 2);
 }
 
@@ -235,6 +243,10 @@ void BSP_buzzer_on(void)
 void BSP_buzzer_off(void)
 {
 	DDRB &= ~ (1 << 2);
+	QF_INT_LOCK();
+	OCR1BH = 0;
+	OCR1BL = 1;
+	QF_INT_UNLOCK();
 }
 
 

@@ -47,7 +47,7 @@ void BSP_lcd_pwm_on(void);
 void BSP_lcd_pwm_off(void);
 
 void BSP_leds(uint8_t *data);
-void BSP_buzzer_on(void);
+void BSP_buzzer_on(uint8_t volume);
 void BSP_buzzer_off(void);
 
 void BSP_enable_rtc_interrupt(void);
