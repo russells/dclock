@@ -565,11 +565,21 @@ static QState setMinutesState(struct TimeSetter *me)
 	case BUTTON_UP_PRESS_SIGNAL:
 	case BUTTON_UP_REPEAT_SIGNAL:
 		me->setTime[1] = inc_minutes(me->setTime[1]);
+		if (SETTING_ALARM == me->settingWhich) {
+			while (me->setTime[1] % 5) {
+				me->setTime[1] = inc_minutes(me->setTime[1]);
+			}
+		}
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case BUTTON_DOWN_PRESS_SIGNAL:
 	case BUTTON_DOWN_REPEAT_SIGNAL:
 		me->setTime[1] = dec_minutes(me->setTime[1]);
+		if (SETTING_ALARM == me->settingWhich) {
+			while (me->setTime[1] % 5) {
+				me->setTime[1] = dec_minutes(me->setTime[1]);
+			}
+		}
 		post(me, UPDATE_TIME_SET_SIGNAL, 0);
 		return Q_HANDLED();
 	case UPDATE_TIME_SET_CURSOR_SIGNAL:
