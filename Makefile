@@ -66,7 +66,7 @@ EFUSE ?= $$(head -1 fuse-efuse)
 
 QPN_INCDIR ?= qp-nano/include
 EXTRA_LINK_FLAGS = -Wl,-Map,$(PROGRAMMAPFILE),--cref
-TARGET_MCU = atmega328p
+TARGET_MCU = at90usb1286
 CFLAGS  = -c -gdwarf-2 -std=gnu99 -Os -fsigned-char -fshort-enums \
 	$(ALARM_FLAGS) \
 	-Wno-attributes \
@@ -142,7 +142,7 @@ clean:
 
 .PHONY: flash
 flash: $(HEXPROGRAM)
-	avrdude -p m328p -B 20 \
+	avrdude -p usb1286 -B 20 \
 		-P $(AVR_PROGRAMMER_PORT) -c $(AVR_PROGRAMMER) \
 		-U lfuse:w:$(LFUSE):m \
 		-U hfuse:w:$(HFUSE):m \
