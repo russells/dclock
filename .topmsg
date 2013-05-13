@@ -1,0 +1,10 @@
+From: Russell Steicke <russells@adelie.cx>
+Subject: Use a Teensy, instead of an Arduino.
+
+The Teensy++ 2.0 is smaller, has more IO, more of all types of memory,
+and a 0.1 inch footprint.  It uses an 8 bit AVR, similar to the
+Arduino.
+
+http://www.pjrc.com/teensy/
+
+Signed-off-by: Russell Steicke <russells@adelie.cx>
