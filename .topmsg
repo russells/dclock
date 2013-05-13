@@ -7,4 +7,13 @@ Arduino.
 
 http://www.pjrc.com/teensy/
 
+This will only duplicate the current feature set.  Adding features
+comes later.
+
+TODO:
+
+- Allocate IO from the AT90USB1286 to the dclock.
+
+- Breadboard the new prototype.
+
 Signed-off-by: Russell Steicke <russells@adelie.cx>
