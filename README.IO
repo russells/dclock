@@ -24,7 +24,7 @@ A4		PC4/ADC4/SDA/PCINT12	RTC
 A5		PC5/ADC5/SCL/PCINT13	RTC
 
 
-
+
 Teensy pin allocation for the decimal clock.
 
 Teensy	AT90USB1286			Function
@@ -87,7 +87,7 @@ B1	VCC
 B2	GND
 B3	RESET
 
-
+
 Teensy outline
 
 Note:
@@ -99,46 +99,46 @@ Note:
     +---+
 
 
-            +-----------------------+
-            |        USBCON         |
-        GND .                       . VCC
-            |                       |
-        PB7 .                       . PB6
-            |                       |
-        PD0 .                       . PB5
-            |                       |
-        PD1 .                       . PB4
-            |                       |
-        PD2 .                       . PB3
-            |                       |
-        PD3 .                       . PB2
-            |                       |
-        PD4 .      PE4 . . PE5      . PB1
-            |                       |
-        PD5 .                       . PB0
-            |                       |
-        PD6 .                       . PE7
-            |                       |
-        PD7 .                       . PE6
-            |                       |
-        PE0 .                       . GND
-            |                       |
-        PE1 .                       . AREF
-            |                       |
-        PC0 .                       . PF0
-            |                       |
-        PC1 .        PA4.   .PA0    . PF1
-            |                       |
-        PC2 .        PA5.   .PA1    . PF2
-            |                       |
-        PC3 .        PA6.   .PA2    . PF3
-            |                       |
-        PC4 .    PE2.   .   .PA3    . PF4
-            |          PA7          |
-        PC5 .                       . PF5
-            |                       |
-        PC6 .                       . PF6
-            |                       |
-        PC7 .                       . PF7
-            +-------.---.---.-------+
-                   VCC  GND RST
+                            +-----------------------+
+                            |        USBCON         |
+                        GND .                       . VCC
+                            |                       |
+                        PB7 .                       . PB6
+                            |                       |
+                        PD0 .                       . PB5
+                            |                       |
+                        PD1 .                       . PB4
+                            |                       |
+                        PD2 .                       . PB3
+                            |                       |
+                        PD3 .                       . PB2
+                            |                       |
+                        PD4 .      PE4 . . PE5      . PB1
+                            |                       |
+                        PD5 .                       . PB0
+                            |                       |
+                        PD6 .                       . PE7
+                            |                       |
+                        PD7 .                       . PE6
+                            |                       |
+                        PE0 .                       . GND
+                            |                       |
+                        PE1 .                       . AREF
+                            |                       |
+                        PC0 .                       . PF0
+                            |                       |
+                        PC1 .        PA4.   .PA0    . PF1
+                            |                       |
+                        PC2 .        PA5.   .PA1    . PF2
+                            |                       |
+                        PC3 .        PA6.   .PA2    . PF3
+                            |                       |
+                        PC4 .    PE2.   .   .PA3    . PF4
+                            |          PA7          |
+                        PC5 .                       . PF5
+                            |                       |
+                        PC6 .                       . PF6
+                            |                       |
+                        PC7 .                       . PF7
+                            +-------.---.---.-------+
+                                   VCC  GND RST
