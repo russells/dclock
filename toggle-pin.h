@@ -23,19 +23,19 @@
  *
  * Monitoring that pin will give some idea of how much CPU is being used.
  */
-#define TOGGLE_PORT PORTC
+#define TOGGLE_PORT PORTD
 /**
  * @brief The Data Direction Register for the toggled pin.
  *
  * @see TOGGLE_PORT.
  */
-#define TOGGLE_DDR  DDRC
+#define TOGGLE_DDR  DDRD
 /**
  * @brief The number of the toggled pin.
  *
  * @see TOGGLE_PORT.
  */
-#define TOGGLE_PIN  3
+#define TOGGLE_PIN  6
 
 
 /**

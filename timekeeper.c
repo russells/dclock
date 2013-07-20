@@ -89,7 +89,8 @@ static QState startupState(struct Timekeeper *me)
 {
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
-		QActive_arm((QActive*)me, 1);
+		//QActive_arm((QActive*)me, 1);
+		QActive_postISR((QActive*)me, Q_TIMEOUT_SIG, 0);
 		return Q_HANDLED();
 	case Q_TIMEOUT_SIG:
 		return Q_TRAN(readRTCState);

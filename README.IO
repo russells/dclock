@@ -22,3 +22,123 @@ A2		PC2/ADC2/PCINT10	LED data
 A3		PC3/ADC3/PCINT11	Toggle pin (debugging)
 A4		PC4/ADC4/SDA/PCINT12	RTC
 A5		PC5/ADC5/SCL/PCINT13	RTC
+
+
+
+Teensy pin allocation for the decimal clock.
+
+Teensy	AT90USB1286			Function
+
+1	GND				GND
+2	PB7/PCINT7/OC0A/OC1C
+3	PD0/OC0B/SCL/INT0		RTC
+4	PD1/OC2B/SDA/INT1		RTC
+5	PD2/RXD1/INT2			Serial IO
+6	PD3/TXD1/INT3			Serial IO
+7	PD4/ICP1
+8	PD5/XCK1			LCD Enable
+9	PD6/T1				Toggle pin (debugging)
+10	PD7/T0				LCD R/W
+11	PE0/-WR				LCD RS
+12	PE1/-RD
+13	PC0/A8
+14	PC1/A9
+15	PC2/A10
+16	PC3/A11/T3
+17	PC4/A12/OC3C			LCD data
+18	PC5/A13/OC3B			LCD data
+19	PC6/A14/OC3A			LCD data
+20	PC7/A15/IC3/CLKO		LCD data
+21	PF7/ADC7/TDI
+22	PF6/ADC6/TDO
+23	PF5/ADC5/TMS
+24	PF4/ADC4/TCK
+25	PF3/ADC3
+26	PF2/ADC2			LED data
+27	PF1/ADC1			LED clock
+28	PF0/ADC0			Buttons
+29	AREF
+30	GND
+31	PE6/INT6/AIN0			RTC interrupt
+32	PE7/INT7/AIN1/UVCON
+33	PB0/SS/PCINT0
+34	PB1/PCINT1/SCLK			Programming?
+35	PB2/PDI/PCINT2/MOSI		Programming?
+36	PB3/PDO/PCINT2/MISO		Programming?
+37	PB4/PCINT4/OC2A			LCD brightness
+38	PB5/PCINT5/OC1A
+39	PB6/PCINT6/OC1B			Buzzer
+40	VCC
+Interior
+IA1	PE5/INT5/TOSC2
+IA2	PE4/INT4/TOSC1
+Interior
+IB1	PA4/AD4
+IB2	PA5/AD5
+IB3	PA6/AD6
+IB4	PA7/AD7
+IB5	PA3/AD3
+IB6	PA2/AD2
+IB7	PA1/AD1
+IB8	PA0/AD0
+IB9	PE2/ALE
+Bottom
+B1	VCC
+B2	GND
+B3	RESET
+
+
+Teensy outline
+
+Note:
+- PE4 and PE5 are closer than 0.1".
+- PE3/UID does not appear.
+- Roughly to scale.  0.1" is two chars high and four wide:
+    +---+
+    |   |
+    +---+
+
+
+                            +-----------------------+
+                            |          USB          |
+                        GND .                       . VCC
+                            |                       |
+                        PB7 .                       . PB6     Buzzer
+                            |                       |
+           SCL (RTC)    PD0 .                       . PB5
+                            |                       |
+           SDA (RTC)    PD1 .                       . PB4     LCD brightness
+                            |                       |
+                        PD2 .                       . PB3
+                            |                       |
+                        PD3 .                       . PB2
+                            |                       |
+                        PD4 .       PE4. .PE5       . PB1
+                            |                       |
+           LCD Enable   PD5 .                       . PB0
+                            |                       |
+           Toggle pin   PD6 .                       . PE7
+                            |                       |
+           LCD R/W      PD7 .                       . PE6     RTC interrupt
+                            |                       |
+           LCD RS       PE0 .                       . GND
+                            |                       |
+                        PE1 .                       . AREF
+                            |                       |
+                        PC0 .                       . PF0     Buttons
+                            |                       |
+                        PC1 .        PA4.   .PA0    . PF1     LED clock
+                            |                       |
+                        PC2 .        PA5.   .PA1    . PF2     LED data
+                            |                       |
+                        PC3 .        PA6.   .PA2    . PF3
+                            |                       |
+           LCD data     PC4 .    PE2.   .   .PA3    . PF4
+                            |          PA7          |
+           LCD data     PC5 .                       . PF5
+                            |                       |
+           LCD data     PC6 .                       . PF6
+                            |                       |
+           LCD data     PC7 .                       . PF7
+                            +-------.---.---.-------+
+                                   VCC  GND RST

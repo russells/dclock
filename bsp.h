@@ -57,4 +57,20 @@ void BSP_watchdog(void);
 
 void BSP_set_decimal_32_counter(uint8_t dc);
 
+void BSP_reset(void);
+
+void BSP_enable_morse_line(void);
+void BSP_morse_signal(uint8_t onoff);
+void BSP_stop_everything(void);
+#ifdef __AVR
+/* We have to #define BSP_delay_ms() to keep the code size down.  The delay
+   macros, if called with a constant known at compile time, can calculate the
+   required delay loops then.  But if called with an unknown argument, they
+   need to calculate the delay loops at run time, and hence include a lot of
+   floating point code.  This bloats the binary by over 3kB. */
+#include "cpu-speed.h"
+#include <util/delay.h>
+#define BSP_delay_ms(ms) _delay_ms(ms)
+#endif
+
 #endif	/* bsp_h_INCLUDED */

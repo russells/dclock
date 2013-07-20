@@ -251,9 +251,9 @@ static QState offState(struct Alarm *me)
 	switch (Q_SIG(me)) {
 	case Q_ENTRY_SIG:
 		me->armed = 0;
-		post((&timedisplay), ALARM_OFF_SIGNAL, 0);
-		post((&timekeeper), SET_NORMAL_ALARM_SIGNAL,
-		     nt2it(me->normalAlarmTime));
+		postISR((&timedisplay), ALARM_OFF_SIGNAL, 0);
+		postISR((&timekeeper), SET_NORMAL_ALARM_SIGNAL,
+			nt2it(me->normalAlarmTime));
 		return Q_HANDLED();
 	case TICK_DECIMAL_SIGNAL:
 		return Q_HANDLED();

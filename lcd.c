@@ -12,26 +12,36 @@
 #include <avr/wdt.h>
 
 
+// FIXME get the byte wide interface back.  See the init function, and one_char().
+
 Q_DEFINE_THIS_FILE;
 
 
-#define RS_PORT PORTB
-#define RS_DDR  DDRB
-#define RS_BIT  0
-#define EN_PORT PORTB
-#define EN_DDR  DDRB
-#define EN_BIT  1
-#define D4_PORT PORTD
-#define D4_DDR  DDRD
+#define RS_PORT PORTD
+#define RS_DDR  DDRD
+#define RS_BIT  7
+#define RW_PORT PORTE
+#define RW_DDR  DDRE
+#define RW_BIT  0
+/* Changed because there seems to be a problem with PE1 on my Teensy. */
+/* #define EN_PORT PORTE */
+/* #define EN_DDR  DDRE */
+/* #define EN_BIT  1 */
+#define EN_PORT PORTD
+#define EN_DDR  DDRD
+#define EN_BIT  5
+
+#define D4_PORT PORTC
+#define D4_DDR  DDRC
 #define D4_BIT  4
-#define D5_PORT PORTD
-#define D5_DDR  DDRD
+#define D5_PORT PORTC
+#define D5_DDR  DDRC
 #define D5_BIT  5
-#define D6_PORT PORTD
-#define D6_DDR  DDRD
+#define D6_PORT PORTC
+#define D6_DDR  DDRC
 #define D6_BIT  6
-#define D7_PORT PORTD
-#define D7_DDR  DDRD
+#define D7_PORT PORTC
+#define D7_DDR  DDRC
 #define D7_BIT  7
 
 
@@ -84,6 +94,10 @@ static uint8_t brightness;
 #define RS(x)					\
 	do { if (x) SB(RS_PORT, RS_BIT); else CB(RS_PORT, RS_BIT); } while (0)
 
+/** Set or clear the RW bit in the LCD interface. */
+#define RW(x)					\
+	do { if (x) SB(RW_PORT, RW_BIT); else CB(RW_PORT, RW_BIT); } while (0)
+
 /** Set or clear the EN bit in the LCD interface. */
 #define EN(x)					\
 	do { if (x) SB(EN_PORT, EN_BIT); else CB(EN_PORT, EN_BIT); } while (0)
@@ -105,54 +119,85 @@ static uint8_t brightness;
 	do { if (x) SB(D7_PORT, D7_BIT); else CB(D7_PORT, D7_BIT); } while (0)
 
 
+static void lcd_init2(void);
 static void one_char(uint8_t rs, char c);
+static void half_char(uint8_t rs, char c);
 static void lcd_on(void);
 static void lcd_off(void);
 
 
 void lcd_init(void)
 {
+	uint8_t sreg;
+
+	sreg = SREG;
+	cli();
+
 	brightness = 2;
 	BSP_lcd_init(BRIGHTNESS_2);
 	BSP_lcd_pwm_on();
 
-	/* The HD44780 takes 10ms to start. */
-	_delay_ms(10);
-
-	/* All the display pins are outputs. */
+	/* Set all the display pins as outputs. */
 	SB(RS_DDR, RS_BIT);
+	SB(RW_DDR, RW_BIT);
 	SB(EN_DDR, EN_BIT);
 	SB(D4_DDR, D4_BIT);
 	SB(D5_DDR, D5_BIT);
 	SB(D6_DDR, D6_BIT);
 	SB(D7_DDR, D7_BIT);
-	/* Set all the outputs high.  Idle is high for the EN pin. */
-	RS(1);
-	EN(1);
+
+	/* Set all the control outputs before we send data to them. */
+	RS(0);
+	RW(0);
+	EN(0);
 	D4(1);
 	D5(1);
 	D6(1);
 	D7(1);
 
-	one_char(0, 0x01);	/* Clear display */
-	_delay_ms(1.6);
-	one_char(0, 0x02);	/* Return home */
-	_delay_ms(1.6);
-	one_char(0, 0b00000110);	/* I/D=increment, Shift=0 */
-	one_char(0, 0b00001100);	/* Display on, Cursor off, Blink off */
-	one_char(0, 0b00010000);	/* S/C=0, R/L=0 */
-	one_char(0, 0b00101000);	/* DL=0 (4 bits), N=1 (2 lines), F=0
-					   (5x8) */
+	/* This is the sequence that results in the QP5520 LCD module working
+	   in 4 bit mode (or any mode at all).  Looks weird, but I spend ages
+	   figuring this out. */
+	_delay_ms(50);
+	lcd_init2();
+	lcd_set_cursor(0, 0);
+	_delay_ms(50);
+	lcd_init2();
+
+	lcd_line1("Hello!");
+	_delay_ms(100);
+
+	SREG = sreg;
+}
+
+
+static void lcd_init2(void)
+{
+	_delay_ms(5);
+	for (uint8_t i=0; i<2; i++) {
+		half_char(0, 0b00100000); /* DL=0 */
+		half_char(0, 0b11000000); /* N=1 (2 line), F=X */
+		_delay_ms(5);
+	}
+	half_char(0, 0b00000000);
+	half_char(0, 0b11000000); /* Display on, cursor off, blink off */
+	_delay_ms(5);
+	half_char(0, 0b00000000);
+	half_char(0, 0b00010000); /* Display clear */
+	_delay_ms(5);
+	_delay_ms(5);
+	half_char(0, 0b00000000);
+	half_char(0, 0b01100000); /* I/D=increment, shift=0 */
+	_delay_ms(5);
 }
 
 
 /**
- * Turn off interrupts, display a file name and line number, stop.
+ * Turn off interrupts, display a file name and line number.
  */
-void lcd_assert(char const Q_ROM * const Q_ROM_VAR file, int line)
+void lcd_assert_nostop(char const Q_ROM * const Q_ROM_VAR file, int line)
 {
 	cli();
-	wdt_disable();
 	lcd_on();
 	lcd_clear();
 	_delay_ms(10);
@@ -182,6 +227,12 @@ void lcd_assert(char const Q_ROM * const Q_ROM_VAR file, int line)
 		one_char(1, c);
 		_delay_ms(10);
 	}
+}
+
+
+void lcd_assert(char const Q_ROM * const Q_ROM_VAR file, int line)
+{
+	lcd_assert_nostop(file, line);
 
 	/* Wait forever. */
 	while (1) {
@@ -302,16 +353,41 @@ static void one_char(uint8_t rs, char c)
 	D6(c & 0b01000000);
 	D5(c & 0b00100000);
 	D4(c & 0b00010000);
-	EN(0);
-	_delay_us(5);
+	_delay_us(2);
 	EN(1);
+	_delay_us(2);
+	EN(0);
 	D7(c & 0b00001000);
 	D6(c & 0b00000100);
 	D5(c & 0b00000010);
 	D4(c & 0b00000001);
-	EN(0);
-	_delay_us(5);
 	EN(1);
+	_delay_us(2);
+	EN(0);
+
+	/* Ensure we wait for this char to be absorbed by the LCD. */
+	_delay_us(37);
+
+	SREG = sreg;
+}
+
+
+static void half_char(uint8_t rs, char c)
+{
+	uint8_t sreg;
+
+	sreg = SREG;
+	cli();
+
+	RS(rs);
+	D7(c & 0b10000000);
+	D6(c & 0b01000000);
+	D5(c & 0b00100000);
+	D4(c & 0b00010000);
+	_delay_us(2);
+	EN(1);
+	_delay_us(2);
+	EN(0);
 
 	/* Ensure we wait for this char to be absorbed by the LCD. */
 	_delay_us(37);

@@ -18,6 +18,7 @@ void lcd_dec_brightness(void);
 void lcd_set_brightness(uint8_t b);
 uint8_t lcd_get_brightness(void);
 void lcd_assert(char const Q_ROM * const Q_ROM_VAR file, int line);
+void lcd_assert_nostop(char const Q_ROM * const Q_ROM_VAR file, int line);
 
 
 #define LCD_LINE1_ROM(s)					\

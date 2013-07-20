@@ -14,6 +14,7 @@
 #include "toggle-pin.h"
 #include "twi.h"
 #include "version.h"
+#include <string.h>
 
 
 Q_DEFINE_THIS_FILE;
@@ -64,8 +65,10 @@ Q_ASSERT_COMPILE(QF_MAX_ACTIVE == Q_DIM(QF_active) - 1);
 int main(int argc, char **argv)
 {
 	uint8_t mcusr;
+	char startupmsg[17];
 
  startmain:
+	cli();
 	mcusr = MCUSR;
 	MCUSR = 0;
 	TOGGLE_BEGIN();
@@ -82,6 +85,14 @@ int main(int argc, char **argv)
 	twi_ctor();
 	timekeeper_ctor();
 	lcd_init();
+	// Show the startup reason on the LCD.
+	strcpy(startupmsg, "Startup: ----");
+	if (mcusr & (1<<3)) startupmsg[9] = 'W';
+	if (mcusr & (1<<2)) startupmsg[10] = 'B';
+	if (mcusr & (1<<1)) startupmsg[11] = 'X';
+	if (mcusr & (1<<0)) startupmsg[12] = 'P';
+	lcd_line1(startupmsg);
+	_delay_ms(500);
 	buttons_ctor();
 	alarm_ctor();
 	timedisplay_ctor();
@@ -90,6 +101,10 @@ int main(int argc, char **argv)
 	/* Drain the serial output just before the watchdog timer is
 	   reenabled. */
 	serial_drain();
+	/* Turn off interrrupts until we have initialised the rest of the
+	   hardware, and after QF_run() has properly initialised the active
+	   objects.  Interrupts go back on in QF_onStartup() */
+	QF_INT_LOCK();
 	/* Initialize the BSP.  Enables the watchdog timer. */
 	BSP_init();
 
@@ -101,6 +116,8 @@ int main(int argc, char **argv)
 
 void QF_onStartup(void)
 {
+	Q_ASSERT( (SREG & (1<<7)) == 0 );
+
 	Q_ASSERT(twi.ready);
 	Q_ASSERT(timekeeper.ready);
 	Q_ASSERT(buttons.ready);

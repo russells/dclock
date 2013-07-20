@@ -1,11 +1,11 @@
 0xd9
 
-Default 0xd9
+Default 0x99
 
 Our value 0xd9
 
-RSTDISBL	1
-DWEN		1
+OCDEN	  	1
+JTAGEN		1
 SPIEN		0
 WDTON		1
 EESAVE		1
@@ -13,36 +13,33 @@ BOOTSZx		00
 BOOTRST		1
 
 Bit		No	Description			Default Value
-RSTDISBL (1)	7	External Reset Disable		1 (unprogrammed)
-DWEN		6	debugWIRE Enable		1 (unprogrammed)
-SPIEN (2)	5	Enable Serial Program and	0 (programmed, SPI
+OCDEN (4)	7	Enable OCD			1 (unprogrammed)
+JTAGEN		6	Enable JTAG			0 (unprogrammed)
+SPIEN (1)	5	Enable Serial Program and	0 (programmed, SPI
 			Data Downloading		   programming enabled)
 WDTON (3)	4	Watchdog Timer Always On	1 (unprogrammed)
 EESAVE		3	EEPROM memory is      		1 (unprogrammed), EEPROM
 			preserved through the Chip	   not reserved
 			Erase
-BOOTSZ1		2	Select Boot Size		0 (programmed)(4)
+BOOTSZ1		2	Select Boot Size		0 (programmed)(2)
 			(see
-			Table 26-7 on page 289,
-			Table 26-10 on page 290 and
-			Table 26-13 on page 291
+			Table 30-6 on page 363
 			for details)
-BOOTSZ0		1	Select Boot Size		0 (programmed)(4)
+BOOTSZ0		1	Select Boot Size		0 (programmed)(2)
 			(see
-			Table 26-7 on page 289,
-			Table 26-10 on page 290 and
-			Table 26-13 on page 291
+			Table 30-6 on page 363
 			for details)
 BOOTRST		0	Select Reset Vector		1 (unprogrammed)
 
 Notes:
 
-1. See ”Alternate Functions of Port C” on page 85 for description of
-   RSTDISBL Fuse.
+1. The SPIEN Fuse is not accessible in serial programming mode.
 
-2. The SPIEN Fuse is not accessible in serial programming mode.
+2. See Table 29-8 on page 357 for details.
 
-3. See ”WDTCSR – Watchdog Timer Control Register” on page 54 for details.
+3. See “WDTCSR – Watchdog Timer Control Register” on page 65 for details.
 
-4. The default value of BOOTSZ[1:0] results in maximum Boot Size. See ”Pin
-   Name Mapping” on page 300.
+4. Never ship a product with the OCDEN Fuse programmed regardless of the
+   setting of Lock bits and JTAGEN Fuse. A programmed OCDEN Fuse enables
+   some parts of the clock system to be running in all sleep modes. This
+   may increase the power consumption.

@@ -32,41 +32,45 @@ static volatile uint8_t sendtail = 0;
 void
 serial_init(void)
 {
+	uint8_t sreg;
+
+	sreg = SREG;
 	cli();
 
 	/* Set the baud rate.  Arduino clock = 16MHz, baud = 115200.
 	   doc8161.pdf, p179 and p203. */
-	UBRR0H = 0;
-	UBRR0L = 16;
+	/* FIXME check that the calculations hold for Teensy */
+	UBRR1H = 0;
+	UBRR1L = 16;
 
-	UCSR0A =(1 << U2X0) |
-		(0 << MPCM0);
+	UCSR1A =(1 << U2X1) |
+		(0 << MPCM1);
 
-	UCSR0B =(1<<RXCIE0) |
-		(0<<TXCIE0) |
-		(0<<UDRIE0) |
-		(0<<RXEN0 ) |
-		(1<<TXEN0 ) |
-		(0<<UCSZ02) |
-		(0<<RXB80 ) |
-		(0<<TXB80 );
+	UCSR1B =(1<<RXCIE1) |
+		(0<<TXCIE1) |
+		(0<<UDRIE1) |
+		(0<<RXEN1 ) |
+		(1<<TXEN1 ) |
+		(0<<UCSZ12) |
+		(0<<RXB81 ) |
+		(0<<TXB81 );
 	/* N81 */
-	UCSR0C =(0<<UMSEL01) |
-		(0<<UMSEL00) |
-		(0<<UPM01  ) |
-		(0<<UPM00  ) |
-		(0<<USBS0  ) |
-		(1<<UCSZ01 ) |
-		(1<<UCSZ00 ) |
-		(0<<UCPOL0 );
+	UCSR1C =(0<<UMSEL11) |
+		(0<<UMSEL10) |
+		(0<<UPM11  ) |
+		(0<<UPM10  ) |
+		(0<<USBS1  ) |
+		(1<<UCSZ11 ) |
+		(1<<UCSZ10 ) |
+		(0<<UCPOL1 );
 
 	/* Does the RX pin have to be made input? */
-	DDRD &= ~ ( 1 << 0 );
+	DDRD &= ~ ( 1 << 2 );
 
 	sendhead = 0;
 	sendtail = 0;
 
-	sei();
+	SREG = sreg;
 }
 
 
@@ -160,7 +164,7 @@ put_into_buffer(char c)
 	sendhead++;
 	if (sendhead >= SEND_BUFFER_SIZE)
 		sendhead = 0;
-	UCSR0B |= (1 << UDRIE0);
+	UCSR1B |= (1 << UDRIE1);
 }
 
 
@@ -206,20 +210,20 @@ int serial_send_char(char c)
 }
 
 
-SIGNAL(USART_UDRE_vect)
+SIGNAL(USART1_UDRE_vect)
 {
 	char c;
 
 	TOGGLE_ON();
 
 	if (sendhead == sendtail) {
-		UCSR0B &= ~ (1 << UDRIE0);
+		UCSR1B &= ~ (1 << UDRIE1);
 	} else {
 		c = sendbuffer[sendtail];
 		sendtail++;
 		if (sendtail >= SEND_BUFFER_SIZE)
 			sendtail = 0;
-		UDR0 = c;
+		UDR1 = c;
 	}
 }
 
@@ -227,9 +231,9 @@ SIGNAL(USART_UDRE_vect)
 static void
 serial_send_noint(uint8_t byte)
 {
-	while ( !( UCSR0A & (1<<UDRE0)) );
-	UDR0 = byte;
-	while ( !( UCSR0A & (1<<UDRE0)) );
+	while ( !( UCSR1A & (1<<UDRE1)) );
+	UDR1 = byte;
+	while ( !( UCSR1A & (1<<UDRE1)) );
 }
 
 
@@ -253,11 +257,11 @@ void serial_assert_nostop(char const Q_ROM * const Q_ROM_VAR file, int line)
 
 	/* Drain the existing data out of the buffer. */
 	while (sendhead != sendtail) {
-		UDR0 = sendbuffer[sendtail];
+		UDR1 = sendbuffer[sendtail];
 		sendtail++;
 		if (sendtail >= SEND_BUFFER_SIZE)
 			sendtail = 0;
-		while ( !( UCSR0A & (1<<UDRE0)) );
+		while ( !( UCSR1A & (1<<UDRE1)) );
 	}
 
 	serial_send_noint('\r');
@@ -367,9 +371,45 @@ int serial_send_hex_int(unsigned int x)
 }
 
 
+/**
+ * Wait until all characters in the serial buffer have been sent.
+ *
+ * This can be called with interrupts on or off.  During startup (before
+ * QF_onStartup() - actually before BSP_QF_onStartup()), interrupts will be off
+ * to prevent events being sent to objects that aren't ready.
+ *
+ * At 115kbaud, with a full buffer of 250 characters, the buffer should be
+ * drained in 21.7ms.  So this is safe from the watchdog timer if the watchdog
+ * is set for any timeout except the lowest.
+ */
 void serial_drain(void)
 {
-	while (sendhead != sendtail)
-		;
-}
+	if ( SREG & (1<<7) ) {
+		/* Interrupts are on, so wait for the interrupt code to send
+		   everything. */
+		uint8_t counter = 0;
+		while (sendhead != sendtail) {
+			/* A character takess ~87us at 115k, so delay slightly
+			   longer than that so we can count characters. */
+			_delay_us(90);
+			counter ++;
+			/* If we have sent more than a buffer's worth of
+			   characters, we've been her too long. */
+			Q_ASSERT( counter < SEND_BUFFER_SIZE );
 
+		}
+	} else {
+		/* Interrupts off, stuff characters in the transmit buffer. */
+		char c;
+
+		while (sendhead != sendtail) {
+			c = sendbuffer[sendtail];
+			sendtail++;
+			if (sendtail >= SEND_BUFFER_SIZE)
+				sendtail = 0;
+			while ( !( UCSR1A & (1<<UDRE1)) )
+				;	/* Wait for buffer ready. */
+			UDR1 = c;
+		}
+	}
+}

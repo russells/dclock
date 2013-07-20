@@ -1,6 +1,6 @@
-0x07
+0xf3
 
-Default 0x07    May appear as 0xff due to unimplemented fuses.  This is a
+Default 0xf3    May appear as 0xff due to unimplemented fuses.  This is a
 		problem when programming with dragon_pp, in which case
 		avrdude will complain that the efuse byte cannot be
 		verified.  To fix this:
@@ -8,7 +8,7 @@ Default 0x07    May appear as 0xff due to unimplemented fuses.  This is a
 			   make flash PROGRAMMER=dragon_pp EFUSE=0xff
 
 
-Our value 0x07
+Our value 0xf3
 
 BODLEVELx	111	BOD disabled
 
@@ -18,8 +18,8 @@ Bit		No	Description			Default Value
 –		6	–				1
 –		5	–				1
 –		4	–				1
-–		3	–				1
-BODLEVEL2 (1)	2	Brown-out Detector trigger	1 (unprogrammed)
+HWBE		3	Hardware Boot Enable		0
+BODLEVEL2 (1)	2	Brown-out Detector trigger	0 (programmed)
 			level
 BODLEVEL1 (1)	1	Brown-out Detector trigger	1 (unprogrammed)
 			level
@@ -28,4 +28,4 @@ BODLEVEL0 (1)	0	Brown-out Detector trigger	1 (unprogrammed)
 
 Note:
 
-1. See Table 28-4 on page 318 for BODLEVEL Fuse decoding.
+1. See Table 9-2 on page 60 for BODLEVEL Fuse decoding.

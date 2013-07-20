@@ -108,16 +108,19 @@ void twi_ctor(void)
  */
 static void twi_init(void)
 {
+	uint8_t sreg;
+
+	sreg = SREG;
 	cli();
 	set_twint(twint_null, 0, 0);
 	TWCR = 0;
 	TWSR = 1;		/* Prescaler = 4^1 = 4 */
 	TWBR=10;		/* Approx 160kbits/s SCL */
-	DDRC |= (1 << 5);
-	DDRC |= (1 << 4);
-	PORTC |= (1 << 5);
-	PORTC |= (1 << 4);
-	sei();
+	DDRD |= (1 << 0);
+	DDRD |= (1 << 1);
+	PORTD |= (1 << 0);
+	PORTD |= (1 << 1);
+	SREG = sreg;
 }
 
 
